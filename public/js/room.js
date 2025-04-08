@@ -1,11 +1,14 @@
-// public/js/room.js (With URL Detection, Notification Sounds, and Sound Toggle)
+// public/js/room.js (With URL Detection, Notification Sounds, Sound Toggle, and Settings Modal)
 document.addEventListener('DOMContentLoaded', () => {
     console.log("[RoomJS] DOM Ready.");
+
 
     // --- Notification Sound System Variables ---
     // Declare these at the top of the function scope to prevent lexical declaration errors
     let notificationSound;
     let notificationsEnabled = true; // Default to on
+
+    var chatVolume = localStorage.getItem('chatVolume') || 50;
 
     // --- Check for Socket.IO library ---
     if (typeof io === 'undefined') {
@@ -23,7 +26,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendButton = document.getElementById('send-button');
     const userList = document.getElementById('user-list');
     const soundToggle = document.getElementById('sound-toggle');
+
+    const volumeSlider = document.getElementById('volume-slider');
+
     const body = document.body;
+
+    volumeSlider.addEventListener('input', function() {
+        chatVolume = this.value
+        console.log(`[RoomJS] Volume set to: ${chatVolume}%`);
+    });
+
+    volumeSlider.addEventListener('change', function() {
+        try {
+            localStorage.setItem('chatVolume', this.value); // Save the slider value
+        } catch (e) {
+            console.warn("[RoomJS] Could not save volume preference to localStorage:", e);
+        }
+    });
 
     // --- Check Elements ---
     if (!chatLog || !messageInput || !sendButton || !userList || !body) {
@@ -65,6 +84,92 @@ document.addEventListener('DOMContentLoaded', () => {
         soundToggle.addEventListener('click', toggleNotifications);
     }
 
+    // --- Settings Modal Elements ---
+    const settingsButton = document.getElementById('settings-button');
+    const settingsModal = document.getElementById('settings-modal');
+    const closeModalBtn = document.querySelector('.close-modal');
+    const settingsForm = document.getElementById('room-settings-form');
+    const roomNameInput = document.getElementById('room-name-input');
+    const maxUsersInput = document.getElementById('max-users-input');
+    const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
+
+    // Check for settings elements
+    if (!settingsButton || !settingsModal || !settingsForm || !roomNameInput || !maxUsersInput) {
+        console.error("[RoomJS] One or more settings elements not found");
+    } else {
+        console.log("[RoomJS] Settings elements found, initializing settings functionality");
+        
+        // Initialize settings data
+        let currentRoomName = body?.dataset?.roomName || '';
+        let currentMaxUsers = 10; // Default value, will be updated when we get room info
+        
+        // Button click handler to open the modal
+        settingsButton.addEventListener('click', openModal);
+        
+        // Close button handlers
+        closeModalBtn.addEventListener('click', closeModal);
+        cancelSettingsBtn.addEventListener('click', closeModal);
+        
+        // Close when clicking outside the modal
+        window.addEventListener('click', (event) => {
+            if (event.target === settingsModal) {
+                closeModal();
+            }
+        });
+        
+        // Form submission
+        settingsForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            
+            const newRoomName = roomNameInput.value.trim();
+            const newMaxUsers = parseInt(maxUsersInput.value, 10);
+            
+            // Basic validation
+            if (newRoomName.length < 3 || newRoomName.length > 30) {
+                alert('Room name must be between 3 and 30 characters');
+                return;
+            }
+            
+            if (isNaN(newMaxUsers) || newMaxUsers < 1 || newMaxUsers > 100) {
+                alert('Maximum users must be between 1 and 100');
+                return;
+            }
+            
+            // Only send update if values actually changed
+            if (newRoomName !== currentRoomName || newMaxUsers !== currentMaxUsers) {
+                // Send update request to server
+                socket.emit('updateRoomSettings', {
+                    roomId: roomId,
+                    roomName: newRoomName,
+                    maxUsers: newMaxUsers
+                });
+                
+                logMessage(`<div class="system-message">Updating room settings...</div>`);
+            } else {
+                // No changes made
+                closeModal();
+            }
+        });
+        
+        // Helper function to open modal
+        function openModal() {
+            // Fill form with current values
+            roomNameInput.value = currentRoomName;
+            maxUsersInput.value = currentMaxUsers;
+            
+            // Show modal
+            settingsModal.style.display = 'block';
+        }
+        
+        // Helper function to close modal
+        function closeModal() {
+            settingsModal.style.display = 'none';
+        }
+
+        console.log("[RoomJS] Settings event listeners attached");
+    }
+
+
     // --- Attempt Connection ---
     let socket;
     try {
@@ -87,18 +192,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper: Escape HTML ---
     function escapeHtml(unsafe) {
-  if (typeof unsafe !== 'string') return unsafe; // Return non-strings as is
-  // Correctly replace special characters with HTML entities
-  // console.log("[RoomJS] Escaping HTML for:", unsafe); // Keep logs if helpful
-  let escaped = unsafe
-    .replace(/&/g, "&amp;")  // Replace & with &amp;
-    .replace(/</g, "&lt;")   // Replace < with &lt;
-    .replace(/>/g, "&gt;")   // Replace > with &gt;
-    .replace(/"/g, "&quot;") // CORRECT: Replace " with &quot;
-    .replace(/'/g, "&#039;"); // <<< CORRECT: Replace ' with &#039;
-  // console.log("[RoomJS] Escaped result:", escaped); // Keep logs if helpful
-  return escaped;
-}
+      if (typeof unsafe !== 'string') return unsafe; // Return non-strings as is
+      // Correctly replace special characters with HTML entities
+      // console.log("[RoomJS] Escaping HTML for:", unsafe); // Keep logs if helpful
+      let escaped = unsafe
+        .replace(/&/g, "&amp;")  // Replace & with &amp;
+        .replace(/</g, "&lt;")   // Replace < with &lt;
+        .replace(/>/g, "&gt;")   // Replace > with &gt;
+        .replace(/"/g, "&quot;") // CORRECT: Replace " with &quot;
+        .replace(/'/g, "&#039;"); // <<< CORRECT: Replace ' with &#039;
+      // console.log("[RoomJS] Escaped result:", escaped); // Keep logs if helpful
+      return escaped;
+    }
 
     // --- Helper: Escape for JS in HTML ---
     function escapeJsStringInHtml(unsafe) {
@@ -141,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("[RoomJS] Checking if sound files exist...");
 
         // Check WAV file
-        fetch('sound/notification.wav', { method: 'HEAD' })
+        fetch('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.wav?v=1744073357160', { method: 'HEAD' })
             .then(response => {
                 if (response.ok) {
                     console.log("[RoomJS] WAV sound file exists and is accessible! Status:", response.status);
@@ -156,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
         // Check MP3 file
-        fetch('sound/notification.mp3', { method: 'HEAD' })
+        fetch('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.wav?v=1744073357160', { method: 'HEAD' })
             .then(response => {
                 if (response.ok) {
                     console.log("[RoomJS] MP3 sound file exists and is accessible! Status:", response.status);
@@ -173,9 +278,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function initNotificationSound() {
         // Try to load MP3 first (more widely supported), then fall back to WAV
-        tryLoadSound('sound/notification.mp3').catch(() => {
+        tryLoadSound('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.mp3?v=1744073573418').catch(() => {
             console.log("[RoomJS] MP3 failed, trying WAV format...");
-            return tryLoadSound('sound/notification.wav');
+            return tryLoadSound('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.wav?v=1744073357160');
         }).catch(err => {
             console.error("[RoomJS] All sound formats failed to load:", err);
             // Create a silent dummy sound as a last resort
@@ -236,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 console.log("[RoomJS] Resetting sound to beginning");
                 notificationSound.currentTime = 0;
+                notificationSound.volume = chatVolume / 100;
 
                 console.log("[RoomJS] Calling play()");
                 const playPromise = notificationSound.play();
@@ -513,6 +619,49 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     socket.on('banned', (reason) => { /* similar handling */ });
     socket.on('roomDeleted', (reason) => { /* similar handling */ });
+
+    // Add this with your other socket event handlers
+    socket.on('roomInfo', (roomData) => {
+        console.log("[RoomJS] Received room info:", roomData);
+        if (roomData && roomData.name && roomData.maxUsers) {
+            currentRoomName = roomData.name;
+            currentMaxUsers = roomData.maxUsers;
+            
+            // Update page title if needed
+            document.title = `Chat: ${escapeHtml(currentRoomName)}`;
+            
+            // If there's a room header element, update it
+            const roomHeader = document.querySelector('.room-header h1');
+            if (roomHeader) {
+                roomHeader.textContent = escapeHtml(currentRoomName);
+            }
+        }
+    });
+
+    // New socket event handler for settings update result
+    socket.on('roomSettingsUpdated', (result) => {
+        if (result.success) {
+            logMessage(`<div class="system-message" style="color:green;">Room settings updated successfully!</div>`);
+            
+            // Update our cached values
+            currentRoomName = result.roomName;
+            currentMaxUsers = result.maxUsers;
+            
+            // Update page title
+            document.title = `Chat: ${escapeHtml(currentRoomName)}`;
+            
+            // If there's a room header element, update it
+            const roomHeader = document.querySelector('.room-header h1');
+            if (roomHeader) {
+                roomHeader.textContent = escapeHtml(currentRoomName);
+            }
+            
+            // Close the modal
+            closeModal();
+        } else {
+            logMessage(`<div class="system-message" style="color:red;">Failed to update room settings: ${escapeHtml(result.message)}</div>`);
+        }
+    });
 
 
     console.log("[RoomJS] Core event listeners attached.");

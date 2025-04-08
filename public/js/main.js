@@ -113,6 +113,41 @@ document.addEventListener('DOMContentLoaded', () => {
         roomList.appendChild(ul);
     }
 
+    // --- Helper: Update Single Room ---
+    function updateSingleRoom(updatedRoom) {
+        if (!roomList) return;
+        
+        console.log("[MainJS] Updating single room:", updatedRoom.id);
+        
+        // Find the room in the list
+        const roomElements = roomList.querySelectorAll('li');
+        let roomFound = false;
+        
+        roomElements.forEach(li => {
+            const roomLink = li.querySelector('a');
+            const roomUrl = roomLink.getAttribute('href');
+            const roomId = roomUrl.split('/').pop(); // Extract room ID from URL
+            
+            if (roomId === updatedRoom.id) {
+                roomFound = true;
+                
+                // Update the room name
+                roomLink.textContent = escapeHtml(updatedRoom.name);
+                
+                // Update user count details
+                const detailsSpan = li.querySelector('.details');
+                if (detailsSpan) {
+                    detailsSpan.textContent = ` (${updatedRoom.userCount} / ${updatedRoom.maxUsers} users)`;
+                }
+            }
+        });
+        
+        if (!roomFound) {
+            // If room wasn't found, refresh the entire list
+            socket.emit('joinMainLobby'); // Request a full room list refresh
+        }
+    }
+
     // --- Socket Event Listeners ---
     socket.on('connect', () => {
         console.log(`[MainJS] Connected. Socket ID: ${socket.id}`);
@@ -125,6 +160,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (userCount && typeof data.connectedUsers === 'number') {
             userCount.textContent = data.connectedUsers;
         }
+    });
+
+    // New event listener for single room updates
+    socket.on('roomSettingsChanged', (updatedRoom) => {
+        console.log('[MainJS] Received roomSettingsChanged event', updatedRoom);
+        updateSingleRoom(updatedRoom);
     });
 
     socket.on('disconnect', (reason) => {

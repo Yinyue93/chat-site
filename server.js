@@ -177,16 +177,6 @@ function requireLogin(req, res, next) {
     }
 }
 
-// Function to broadcast room list updates to all clients in the main lobby
-function broadcastRoomListUpdate() {
-    const roomListData = {
-        rooms: getRoomInfoList(),
-        connectedUsers: io.engine.clientsCount || 0
-    };
-    
-    io.to('main_lobby').emit('roomListUpdate', roomListData);
-    console.log(`Broadcasting room list update: ${roomListData.rooms.length} rooms, ${roomListData.connectedUsers} users`);
-}
 
 // ================== ROUTES ==================
 
@@ -281,11 +271,23 @@ app.post('/create-room', requireLogin, (req, res) => {
         createdAt: Date.now()
     };
     console.log(`Room created: '${roomName}' (${roomId}) by ${creator}`);
-    // Add initial log entry
-    addLog(roomId, { type: 'system', message: `Room created by ${creator}`});
-    // Broadcast room list update
-    broadcastRoomListUpdate();
-    res.redirect(`/room/${roomId}`); // Redirect creator to the new room
+    
+    // ADD THIS CODE: Grant access to the creator if a password was set
+    if (password) {
+        req.session[`room_${roomId}_access`] = true; // Grant access for this session
+        console.log(`Granted automatic access to room creator ${creator} for room ${roomId}`);
+        // Ensure session is saved before redirect
+        req.session.save(err => {
+            if (err) console.error("Session save error while granting room access:", err);
+            // Add initial log entry
+            addLog(roomId, { type: 'system', message: `Room created by ${creator}`});
+            res.redirect(`/room/${roomId}`);
+        });
+    } else {
+        // No password, no need to grant special access
+        addLog(roomId, { type: 'system', message: `Room created by ${creator}`});
+        res.redirect(`/room/${roomId}`);
+    }
 });
 
 // --- Room Access ---
@@ -473,18 +475,17 @@ io.on('connection', (socket) => {
         io.to('admin_room').emit('adminUpdate', getAdminData());
     }
 
-    // --- Main Lobby Updates ---
+    // --- Handle Main Lobby Join ---
     socket.on('joinMainLobby', () => {
-        // Join the main lobby room for updates
-        socket.join('main_lobby');
-        console.log(`User ${socket.username || 'Unknown'} joined main lobby`);
-        
-        // Send initial room list
-        const roomListData = {
-            rooms: getRoomInfoList(),
-            connectedUsers: io.engine.clientsCount || 0
-        };
-        socket.emit('roomListUpdate', roomListData);
+         // Make sure we're tracking 'main_lobby' joins
+         socket.join('main_lobby');
+         console.log(`User ${socket.username} joined main lobby`);
+
+         // Send current room list
+         socket.emit('roomListUpdate', {
+             rooms: getRoomInfoList(),
+             connectedUsers: io.sockets.sockets.size // Total connected users
+         });
     });
 
     // --- Handle Room Joining ---
@@ -536,9 +537,6 @@ io.on('connection', (socket) => {
                 addLog(prevRoomId, leaveLog);
                 io.to(prevRoomId).emit('userLeft', leaveLog);
                 io.to(prevRoomId).emit('updateUserList', Array.from(prevRoom.users.values()).map(u => u.username));
-                
-                // Broadcast room list update after user leaves
-                broadcastRoomListUpdate();
 
                 // Check if previous room became empty
                 if (prevRoom.users.size === 0) {
@@ -548,11 +546,15 @@ io.on('connection', (socket) => {
                     if (io.sockets.adapter.rooms.has('admin_room')) {
                         io.to('admin_room').emit('adminUpdate', getAdminData());
                     }
-                    // Broadcast room list update after room deletion
-                    broadcastRoomListUpdate();
+                     // TODO: Optionally broadcast room list update to main lobby?
                 }
             }
         }
+         // Also leave the main lobby if joining a specific room
+         if (socket.rooms.has('main_lobby')) {
+             socket.leave('main_lobby');
+             console.log(`User ${socket.username} left main lobby to join room ${roomId}`);
+         }
 
         // --- Join the new room ---
         socket.join(roomId);
@@ -575,9 +577,15 @@ io.on('connection', (socket) => {
          if (io.sockets.adapter.rooms.has('admin_room')) {
             io.to('admin_room').emit('adminUpdate', getAdminData());
          }
-         
-         // Broadcast room list update after user joins
-         broadcastRoomListUpdate();
+
+        // This sends room info to the joining user
+        socket.emit('roomInfo', {
+             name: room.name,
+             maxUsers: room.maxUsers,
+             currentUsers: room.users.size,
+             isHidden: room.isHidden,
+             createdBy: room.createdBy
+        });
     });
 
     // --- Handle Incoming Messages ---
@@ -602,6 +610,118 @@ io.on('connection', (socket) => {
         }
     });
 
+    // --- Handle Room Settings Update ---
+    socket.on('updateRoomSettings', ({ roomId, roomName, maxUsers }) => {
+        console.log(`[Server] Received room settings update for ${roomId}`);
+
+        // Safety checks
+        if (!socket.username || !socket.currentRoom) {
+            return socket.emit('roomSettingsUpdated', {
+                success: false,
+                message: 'You must be in a room to update settings'
+            });
+        }
+
+        // Check if this is the user's current room
+        if (socket.currentRoom !== roomId) {
+            return socket.emit('roomSettingsUpdated', {
+                success: false,
+                message: 'You can only update settings for your current room'
+            });
+        }
+
+        const room = rooms[roomId];
+        if (!room) {
+            return socket.emit('roomSettingsUpdated', {
+                success: false,
+                message: 'Room not found'
+            });
+        }
+
+        // Check if user is admin or room creator
+        const isCreator = room.createdBy === socket.username;
+        if (!socket.isAdmin && !isCreator) {
+            return socket.emit('roomSettingsUpdated', {
+                success: false,
+                message: 'You do not have permission to change room settings'
+            });
+        }
+
+        // Validate input
+        if (!roomName || roomName.length < 3 || roomName.length > 30) {
+            return socket.emit('roomSettingsUpdated', {
+                success: false,
+                message: 'Room name must be between 3 and 30 characters'
+            });
+        }
+
+        const max = parseInt(maxUsers, 10);
+        if (isNaN(max) || max < 1 || max > 100) {
+            return socket.emit('roomSettingsUpdated', {
+                success: false,
+                message: 'Maximum users must be between 1 and 100'
+            });
+        }
+
+        // Check if new max users is less than current user count
+        if (max < room.users.size) {
+            return socket.emit('roomSettingsUpdated', {
+                success: false,
+                message: `Cannot set max users to ${max} when room has ${room.users.size} users`
+            });
+        }
+
+        // All checks passed, update the room
+        const oldName = room.name;
+        room.name = roomName;
+        room.maxUsers = max;
+
+        console.log(`Room ${roomId} updated: Name changed from "${oldName}" to "${roomName}", Max users set to ${max}`);
+
+        // Add a system log entry
+        addLog(roomId, {
+            type: 'system',
+            message: `Room settings updated by ${socket.username}${socket.isAdmin ? ' (Admin)' : ''}. Name: "${oldName}" → "${roomName}", Max users: ${max}`
+        });
+
+        // Notify all users in the room
+        io.to(roomId).emit('roomSettingsUpdated', {
+            success: true,
+            roomName: roomName,
+            maxUsers: max
+        });
+
+        // Send system message to chat
+        io.to(roomId).emit('newMessage', {
+            type: 'system',
+            username: 'System',
+            message: `Room settings updated by ${socket.username}${socket.isAdmin ? ' (Admin)' : ''}`,
+            timestamp: Date.now()
+        });
+
+        // Notify admin panel if needed
+        if (io.sockets.adapter.rooms.has('admin_room')) {
+            io.to('admin_room').emit('adminUpdate', getAdminData());
+        }
+
+        // Notify users in the main lobby about the updated room
+        // First, find if there's an active lobby room
+        if (io.sockets.adapter.rooms.has('main_lobby')) {
+             // Create a simplified room object for the lobby
+             const lobbyRoomInfo = {
+                 id: roomId,
+                 name: roomName,
+                 userCount: room.users.size,
+                 maxUsers: max,
+                 hasPassword: !!room.password
+             };
+
+             // Send update to all users in the main lobby
+             io.to('main_lobby').emit('roomSettingsChanged', lobbyRoomInfo);
+             console.log(`[Server] Notified main lobby of room changes for ${roomId}`);
+        }
+    });
+
     // --- Admin Socket Actions ---
     socket.on('adminJoin', () => { // For when admin panel page loads/connects
          if (socket.isAdmin) {
@@ -623,8 +743,6 @@ io.on('connection', (socket) => {
                   if (io.sockets.adapter.rooms.has('admin_room')) {
                      io.to('admin_room').emit('adminUpdate', getAdminData());
                   }
-                  // Broadcast room list update after kick
-                  broadcastRoomListUpdate();
              }, 500);
         } else {
              console.warn(`Admin ${socket.username} failed kick: Target ${socketIdToKick} not found or is admin.`);
@@ -664,8 +782,6 @@ io.on('connection', (socket) => {
                     if (io.sockets.adapter.rooms.has('admin_room')) {
                         io.to('admin_room').emit('adminUpdate', getAdminData());
                     }
-                    // Broadcast room list update after ban
-                    broadcastRoomListUpdate();
                  }, 500);
             } else {
                 console.log(`Admin ${socket.username} ban attempt resulted in no change for ${username}`);
@@ -695,14 +811,17 @@ io.on('connection', (socket) => {
             delete rooms[roomIdToDelete];
             console.log(`Room object deleted for ${roomIdToDelete}`);
 
+            // Notify main lobby about room deletion
+            if (io.sockets.adapter.rooms.has('main_lobby')) {
+                io.to('main_lobby').emit('roomDeleted', roomIdToDelete); // Send ID of deleted room
+                console.log(`Notified main lobby of room deletion: ${roomIdToDelete}`);
+            }
+
             // Update admin panel
             if (io.sockets.adapter.rooms.has('admin_room')) {
                 console.log(' > Emitting adminUpdate after room deletion');
                 io.to('admin_room').emit('adminUpdate', getAdminData());
             }
-             
-            // Broadcast room list update after room deletion
-            broadcastRoomListUpdate();
 
         } else {
             console.log(`Admin ${socket.username} tried to delete non-existent room: ${roomIdToDelete}`);
@@ -712,18 +831,34 @@ io.on('connection', (socket) => {
 
     socket.on('adminToggleHideRoom', ({ roomIdToToggle }) => {
         if (!socket.isAdmin) return socket.emit('errorMsg', 'Permission denied.');
-        if (rooms[roomIdToToggle]) {
-            rooms[roomIdToToggle].isHidden = !rooms[roomIdToToggle].isHidden;
-            const status = rooms[roomIdToToggle].isHidden ? 'hidden' : 'visible';
-            console.log(`Admin ${socket.username} toggled room ${rooms[roomIdToToggle].name} to ${status}`);
-            
+        const roomToToggle = rooms[roomIdToToggle];
+        if (roomToToggle) {
+            roomToToggle.isHidden = !roomToToggle.isHidden;
+            const status = roomToToggle.isHidden ? 'hidden' : 'visible';
+            console.log(`Admin ${socket.username} toggled room ${roomToToggle.name} to ${status}`);
+
+             // Notify main lobby about hide/show status change
+            if (io.sockets.adapter.rooms.has('main_lobby')) {
+                 if (roomToToggle.isHidden) {
+                      io.to('main_lobby').emit('roomHidden', roomIdToToggle); // Send ID of hidden room
+                 } else {
+                      // If made visible, send the full room info
+                      const lobbyRoomInfo = {
+                           id: roomIdToToggle,
+                           name: roomToToggle.name,
+                           userCount: roomToToggle.users.size,
+                           maxUsers: roomToToggle.maxUsers,
+                           hasPassword: !!roomToToggle.password
+                      };
+                      io.to('main_lobby').emit('roomShown', lobbyRoomInfo);
+                 }
+                 console.log(`Notified main lobby of room visibility change: ${roomIdToToggle}`);
+            }
+
             // Update admin panel
             if (io.sockets.adapter.rooms.has('admin_room')) {
                io.to('admin_room').emit('adminUpdate', getAdminData());
             }
-            
-            // Broadcast room list update after hiding/unhiding
-            broadcastRoomListUpdate();
         } else {
              socket.emit('errorMsg', 'Room not found, cannot toggle hidden status.');
         }
@@ -755,20 +890,27 @@ io.on('connection', (socket) => {
                 addLog(roomId, leaveMsg);
                 io.to(roomId).emit('userLeft', leaveMsg);
                 io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
-                
-                // Broadcast room list update when user leaves
-                broadcastRoomListUpdate();
 
                 // Check if room is now empty and delete if necessary
                 if (room.users.size === 0) {
                     console.log(`Deleting empty room after last user disconnected: ${room.name} (${roomId})`);
                     delete rooms[roomId];
+
+                    // Notify main lobby about room deletion
+                    if (io.sockets.adapter.rooms.has('main_lobby')) {
+                        io.to('main_lobby').emit('roomDeleted', roomId); // Send ID of deleted room
+                        console.log(`Notified main lobby of room deletion: ${roomId}`);
+                    }
                     // Notify admin panel about room deletion
                     if (io.sockets.adapter.rooms.has('admin_room')) {
                         io.to('admin_room').emit('adminUpdate', getAdminData());
                     }
-                    // Broadcast room list update after room deletion
-                    broadcastRoomListUpdate();
+
+                } else {
+                     // If room not deleted, update user count in main lobby
+                     if (io.sockets.adapter.rooms.has('main_lobby')) {
+                          io.to('main_lobby').emit('roomUserCountUpdate', { roomId: roomId, userCount: room.users.size });
+                     }
                 }
             }
         }
@@ -780,6 +922,11 @@ io.on('connection', (socket) => {
                 io.to('admin_room').emit('adminUpdate', getAdminData());
            }, 100);
         }
+
+         // Update total user count for main lobby (if anyone is there)
+         if (io.sockets.adapter.rooms.has('main_lobby')) {
+             io.to('main_lobby').emit('totalUserUpdate', io.sockets.sockets.size);
+         }
     });
 });
 
