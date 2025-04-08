@@ -33,14 +33,56 @@
         .download-link:hover { background-color: #117a8b; }
         .flag-icon { width: 18px; height: auto; vertical-align: middle; margin-left: 5px; } /* Style for flags */
         .hidden-row { opacity: 0.6; font-style: italic; } /* Style for hidden rooms */
+        
+        /* Style for header with navigation buttons */
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .admin-header h1 {
+            margin: 0;
+            border: none;
+            padding: 0;
+        }
+        .admin-nav {
+            display: flex;
+            gap: 10px;
+        }
+        .back-btn {
+            background-color: #007bff;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .back-btn:hover {
+            background-color: #0056b3;
+        }
+        .logout-btn {
+            background-color: #6c757d;
+            color: white;
+        }
+        .logout-btn:hover {
+            background-color: #5a6268;
+        }
     </style>
 </head>
 <body>
 
     <div class="admin-container">
-        <h1>Admin Control Panel</h1>
-        <!-- Optional: Add Logout link for admin -->
-        <!-- <a href="/logout">Logout Admin</a> -->
+        <!-- Updated header with navigation -->
+        <div class="admin-header">
+            <h1>Admin Control Panel</h1>
+            <div class="admin-nav">
+                <a href="/main" class="back-btn">← Back to Main</a>
+                <form action="/logout" method="POST" style="display: inline;">
+                    <button type="submit" class="logout-btn">Logout</button>
+                </form>
+            </div>
+        </div>
 
         <!-- Users Section -->
         <section class="section">

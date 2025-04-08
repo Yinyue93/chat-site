@@ -69,6 +69,7 @@
             padding: 10px 15px;
             cursor: pointer;
             font-size: 15px;
+            display: hidden;
         }
         #test-sound:hover {
             background-color: #218838;
@@ -83,14 +84,151 @@
             color: #0056b3;
             text-decoration: underline;
         }
+        
+        /* Settings button styles */
+        #settings-button {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        #settings-button:hover {
+            background-color: #5a6268;
+        }
+        
+        /* Room header with title and settings button */
+        .room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .room-header h1 {
+            margin: 0;
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            position: relative;
+            background-color: #fefefe;
+            margin: 10% auto;
+            padding: 0;
+            border: 1px solid #888;
+            width: 50%;
+            max-width: 500px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            animation: modalOpen 0.3s ease;
+        }
+
+        @keyframes modalOpen {
+            from {opacity: 0; transform: translateY(-20px);}
+            to {opacity: 1; transform: translateY(0);}
+        }
+
+        .modal-header {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            border-bottom: none;
+        }
+
+        .modal-body {
+            padding: 15px;
+        }
+
+        .close-modal {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-modal:hover,
+        .close-modal:focus {
+            color: black;
+            text-decoration: none;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .form-buttons {
+            text-align: right;
+            margin-top: 20px;
+        }
+
+        .form-buttons button {
+            padding: 8px 16px;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+        #save-settings-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+        }
+
+        #cancel-settings-btn {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+        }
     </style>
 </head>
 <body
     data-room-id="<%= roomId %>"
-    data-username="<%= username %>">
+    data-username="<%= username %>"
+    data-room-name="<%= roomName %>">
 
     <div class="chat-container">
-        <h1><%= roomName %></h1>
+        <!-- Modified header section with settings button -->
+        <div class="room-header">
+            <h1><%= roomName %></h1>
+            <button id="settings-button" class="control-button" title="Room Settings">
+                <i class="fas fa-cog"></i> Settings
+            </button>
+        </div>
+        
         <div id="chat-log">
             <!-- Chat messages will appear here -->
         </div>
@@ -99,9 +237,10 @@
             <button id="sound-toggle" title="Turn notification sounds off">
                 <i class="fas fa-volume-up"></i>
             </button>
-            <button id="test-sound" title="Test notification sound">
+<!--             <button id="test-sound" title="Test notification sound">
                 Test Sound
-            </button>
+            </button> -->
+          <input type="range" id="volume-slider" min="0" max="100" value="50" title="Adjust Volume" style="align-self:center;">
             <button id="send-button" title="Send Message">Send</button>
             <input type="file" id="image-input" accept="image/*">
             <button id="upload-button" title="Attach Image">
@@ -116,6 +255,32 @@
             <!-- User list will appear here -->
         </ul>
         <a href="/main" id="exit-button" style="text-align: center; text-decoration: none;">Exit Room</a>
+    </div>
+    
+    <!-- Settings Modal Dialog -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close-modal">&times;</span>
+                <h2>Room Settings</h2>
+            </div>
+            <div class="modal-body">
+                <form id="room-settings-form">
+                    <div class="form-group">
+                        <label for="room-name-input">Room Name:</label>
+                        <input type="text" id="room-name-input" name="roomName" minlength="3" maxlength="30" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="max-users-input">Maximum Users:</label>
+                        <input type="number" id="max-users-input" name="maxUsers" min="1" max="100" required>
+                    </div>
+                    <div class="form-buttons">
+                        <button type="submit" id="save-settings-btn">Save Changes</button>
+                        <button type="button" id="cancel-settings-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
