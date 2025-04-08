@@ -1,0 +1,22 @@
+{
+  "name": "glitch-chat",
+  "version": "0.0.1",
+  "description": "A real-time chat site on Glitch.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^4.4.0", 
+    "ejs": "^3.1.6",
+    "lowdb": "^3.0.0", 
+    "multer": "^1.4.3",
+    "express-session": "^1.17.2",
+    "uuid": "^8.3.2", 
+    "geoip-lite": "^1.4.3" 
+  },
+  "engines": {
+    "node": "16.x" 
+  }
+}

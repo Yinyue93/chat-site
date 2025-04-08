@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Rooms - Glitch Chat</title>
+    <link rel="stylesheet" href="/css/style.css"> <!-- Link to your CSS -->
+    <!-- Add Socket.IO client library -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Add main.js for real-time updates -->
+    <script src="/js/main.js"></script>
+    <style>
+        /* Basic styling for demonstration */
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
+        .container { max-width: 800px; margin: 20px auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        .header h1 { margin: 0; }
+        .header .user-info { font-size: 1.1em; }
+        .header .actions form, .header .actions a { display: inline-block; margin-left: 10px;}
+        h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; color: #333; }
+        .room-list ul { list-style: none; padding: 0; }
+        .room-list li { border: 1px solid #eee; padding: 10px 15px; margin-bottom: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; background-color: #fff; transition: background-color 0.2s ease; }
+        .room-list li:hover { background-color: #f8f9fa; }
+        .room-list a { text-decoration: none; color: #007bff; font-weight: bold; }
+        .room-list .details { color: #555; font-size: 0.9em; }
+        .room-list .password-icon { margin-left: 10px; color: #ffc107; } /* Style for password indicator */
+        .room-list .join-button { padding: 5px 10px; background-color: #28a745; color: white; border-radius: 3px; text-decoration: none; font-size: 0.9em; }
+        .room-list .join-button:hover { background-color: #218838; }
+
+        .create-room-form { background-color: #f9f9f9; padding: 20px; border: 1px solid #ccc; border-radius: 5px; margin-top: 30px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input[type="text"], input[type="number"], input[type="password"] { width: 95%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; }
+        button[type="submit"] { padding: 10px 15px; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        .create-room-form button[type="submit"] { background-color: #007bff;}
+        .create-room-form button[type="submit"]:hover { background-color: #0056b3;}
+        .no-rooms { color: #777; }
+        .logout-btn { background-color: #6c757d; }
+        .logout-btn:hover { background-color: #5a6268; }
+        .admin-panel-btn { background-color: #dc3545; color: white; text-decoration: none; padding: 10px 15px; border-radius: 3px; }
+        .admin-panel-btn:hover { background-color: #c82333; }
+        /* Add stats section styling */
+        .stats-section {
+            margin-top: 15px;
+            padding: 8px 15px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #495057;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <div class="user-info">Welcome, <strong><%= username %></strong>!</div>
+            <div class="actions">
+                <!-- Added Admin Panel Button (Conditional) -->
+                <% if (typeof isAdmin !== 'undefined' && isAdmin) { %>
+                    <a href="/admin" class="admin-panel-btn">Admin Panel</a>
+                <% } %>
+                <!-- End Added Button -->
+
+                <!-- Added Logout Form/Button -->
+                <form action="/logout" method="POST" style="display: inline;">
+                    <button type="submit" class="logout-btn">Logout</button>
+                </form>
+                 <!-- End Added Logout -->
+            </div>
+        </div>
+
+        <!-- Add stats section -->
+        <div class="stats-section">
+            <p>Online Users: <span id="user-count">0</span></p>
+        </div>
+
+        <!-- Section for Available Rooms - Modified for dynamic updates -->
+        <section class="room-list">
+            <h2>Available Rooms (<span id="room-count"><%= rooms.length %></span>)</h2>
+            <div id="room-list">
+                <% if (typeof rooms !== 'undefined' && rooms.length > 0) { %>
+                    <ul>
+                        <% rooms.forEach(room => { %>
+                            <li>
+                                <div>
+                                    <a href="/room/<%= room.id %>"><%= room.name %></a>
+                                    <span class="details">
+                                        (<%= room.userCount %> / <%= room.maxUsers %> users)
+                                    </span>
+                                    <% if (room.hasPassword) { %>
+                                        <span class="password-icon" title="Password protected">🔒</span>
+                                    <% } %>
+                                </div>
+                                <a href="/room/<%= room.id %>" class="join-button">Join</a>
+                            </li>
+                        <% }); %>
+                    </ul>
+                <% } else { %>
+                    <p class="no-rooms">No rooms available yet. Create one below!</p>
+                <% } %>
+            </div>
+        </section>
+
+        <!-- Section for Creating a Room -->
+        <section class="create-room-form">
+            <h2>Create New Room</h2>
+            <form action="/create-room" method="POST">
+                <div class="form-group">
+                    <label for="roomName">Room Name:</label>
+                    <input type="text" id="roomName" name="roomName" required>
+                </div>
+                <div class="form-group">
+                    <label for="maxUsers">Max Participants:</label>
+                    <input type="number" id="maxUsers" name="maxUsers" min="1" value="10" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password (Optional):</label>
+                    <input type="password" id="password" name="password" placeholder="Leave blank for no password">
+                </div>
+                <button type="submit">Create Room</button>
+            </form>
+        </section>
+
+    </div>
+
+</body>
+</html>

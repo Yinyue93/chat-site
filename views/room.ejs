@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Room: <%= roomName %></title>
+    <link rel="stylesheet" href="/css/style.css"> <!-- Link to your CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        /* Basic styling for demonstration */
+        body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; background-color: #f4f4f4; }
+        .chat-container { flex-grow: 1; display: flex; flex-direction: column; padding: 15px; background-color: #fff; margin: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);}
+        .sidebar { width: 220px; border-left: 1px solid #ccc; padding: 15px; background-color: #f8f9fa; margin: 10px 10px 10px 0; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1);}
+        h1, .sidebar h2 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 15px; }
+        #chat-log { flex-grow: 1; border: 1px solid #ddd; margin-bottom: 10px; padding: 10px; overflow-y: scroll; background-color: #fff; border-radius: 4px; }
+        .message-input-area { display: flex; gap: 10px; margin-top: 10px; }
+        #message-input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        #send-button, #upload-button, #exit-button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; }
+        #send-button { background-color: #007bff; color: white; }
+        #send-button:hover { background-color: #0056b3; }
+        #upload-button { background-color: #17a2b8; color: white; }
+        #upload-button:hover { background-color: #117a8b; }
+        #exit-button { background-color: #dc3545; color: white; margin-top: auto; /* Pushes to bottom */ width: 100%; box-sizing: border-box;}
+        #exit-button:hover { background-color: #c82333; }
+        #image-input { display: none; } /* Hide the actual file input */
+        #user-list { list-style: none; padding: 0; margin-top: 10px; }
+        #user-list li { padding: 6px 0; border-bottom: 1px dashed #eee; color: #555;}
+        .chat-message { margin-bottom: 10px; line-height: 1.4; }
+        .chat-message .username { font-weight: bold; color: #0056b3; margin-right: 5px;}
+        /* *** Style for Admin Username *** */
+        .chat-message .username.admin-username {
+            color: red;
+            font-weight: bold; /* Keep or adjust as needed */
+        }
+        /* *** End Style *** */
+        .chat-message .timestamp { font-size: 0.8em; color: #888; margin-left: 10px; }
+        .chat-message img { max-width: 250px; max-height: 200px; display: block; margin-top: 5px; border: 1px solid #eee; border-radius: 4px; cursor: pointer; }
+        .system-message { font-style: italic; color: #6c757d; text-align: center; margin: 8px 0; font-size: 0.9em; }
+        
+        /* Sound toggle button styles */
+        #sound-toggle {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+            padding: 0;
+        }
+        #sound-toggle:hover {
+            background-color: #5a6268;
+        }
+        #sound-toggle:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(108, 117, 125, 0.5);
+        }
+        
+        /* Test sound button style */
+        #test-sound {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+        #test-sound:hover {
+            background-color: #218838;
+        }
+        
+        /* Style for clickable links in messages */
+        .chat-message a {
+            color: #007bff;
+            text-decoration: underline;
+        }
+        .chat-message a:hover {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body
+    data-room-id="<%= roomId %>"
+    data-username="<%= username %>">
+
+    <div class="chat-container">
+        <h1><%= roomName %></h1>
+        <div id="chat-log">
+            <!-- Chat messages will appear here -->
+        </div>
+        <div class="message-input-area">
+            <input type="text" id="message-input" placeholder="Type your message..." autofocus>
+            <button id="sound-toggle" title="Turn notification sounds off">
+                <i class="fas fa-volume-up"></i>
+            </button>
+            <button id="test-sound" title="Test notification sound">
+                Test Sound
+            </button>
+            <button id="send-button" title="Send Message">Send</button>
+            <input type="file" id="image-input" accept="image/*">
+            <button id="upload-button" title="Attach Image">
+                <i class="fas fa-image"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <h2>Users Online</h2>
+        <ul id="user-list">
+            <!-- User list will appear here -->
+        </ul>
+        <a href="/main" id="exit-button" style="text-align: center; text-decoration: none;">Exit Room</a>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/room.js"></script> <!-- Your client-side room logic -->
+</body>
+</html>
