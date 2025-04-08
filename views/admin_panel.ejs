@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Glitch Chat</title>
+    <link rel="stylesheet" href="/css/style.css"> <!-- Link to your CSS -->
+    <style>
+        /* Basic styling for demonstration */
+        body { font-family: sans-serif; padding: 20px; }
+        .admin-container { max-width: 1200px; margin: 20px auto; }
+        h1, h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        .section { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #f8f9fa; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #fff; }
+        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+        th { background-color: #e9ecef; }
+        .search-box { margin-bottom: 10px; padding: 5px; width: 250px; }
+        button, .action-link {
+            padding: 5px 10px; margin: 0 3px; border: none; border-radius: 3px; cursor: pointer;
+            text-decoration: none; display: inline-block; font-size: 0.9em;
+        }
+        .kick-btn { background-color: #ffc107; color: #333; }
+        .kick-btn:hover { background-color: #e0a800; }
+        .ban-btn { background-color: #dc3545; color: white; }
+        .ban-btn:hover { background-color: #c82333; }
+        .delete-btn { background-color: #dc3545; color: white; }
+        .delete-btn:hover { background-color: #c82333; }
+        .hide-btn { background-color: #6c757d; color: white; }
+        .hide-btn:hover { background-color: #5a6268; }
+        .unhide-btn { background-color: #28a745; color: white; }
+        .unhide-btn:hover { background-color: #218838; }
+        .download-link { background-color: #17a2b8; color: white; }
+        .download-link:hover { background-color: #117a8b; }
+        .flag-icon { width: 18px; height: auto; vertical-align: middle; margin-left: 5px; } /* Style for flags */
+        .hidden-row { opacity: 0.6; font-style: italic; } /* Style for hidden rooms */
+    </style>
+</head>
+<body>
+
+    <div class="admin-container">
+        <h1>Admin Control Panel</h1>
+        <!-- Optional: Add Logout link for admin -->
+        <!-- <a href="/logout">Logout Admin</a> -->
+
+        <!-- Users Section -->
+        <section class="section">
+            <h2>Connected Users (<span id="user-count"><%= users.length %></span>)</h2>
+            <input type="text" id="user-search" class="search-box" placeholder="Search by Username or IP...">
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>IP Address</th>
+                        <th>Country</th>
+                        <th>Current Room</th>
+                        <th>Socket ID</th>
+                        <th>Admin?</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="users-tbody">
+                    <% users.forEach(user => { %>
+                        <tr data-username="<%= user.username.toLowerCase() %>" data-ip="<%= user.ipAddress %>">
+                            <td><%= user.username %></td>
+                            <td><%= user.ipAddress %></td>
+                            <td>
+                                <%= user.country %>
+                                <% if (user.country && user.country !== '?') { %>
+                                    <img src="https://flagsapi.com/<%= user.country %>/flat/24.png" alt="<%= user.country %>" class="flag-icon" title="<%= user.country %>">
+                                <% } %>
+                            </td>
+                            <td><%= user.roomName %> (<%= user.roomId || 'N/A' %>)</td>
+                            <td><%= user.socketId %></td>
+                            <td><%= user.isAdmin ? 'Yes' : 'No' %></td>
+                            <td>
+                                <% if (!user.isAdmin) { %> <!-- Don't allow kicking/banning other admins -->
+                                <button class="kick-btn" data-socket-id="<%= user.socketId %>">Kick</button>
+                                <button class="ban-btn" data-socket-id="<%= user.socketId %>" data-username="<%= user.username %>" data-ip="<%= user.ipAddress %>">Ban (User/IP)</button>
+                                <% } else { %>
+                                    (Admin)
+                                <% } %>
+                            </td>
+                        </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Rooms Section -->
+        <section class="section">
+            <h2>Active Rooms (<span id="room-count"><%= rooms.length %></span>)</h2>
+            <input type="text" id="room-search" class="search-box" placeholder="Search by Room Name...">
+            <table id="rooms-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>ID</th>
+                        <th>Users</th>
+                        <th>Max</th>
+                        <th>Hidden?</th>
+                        <th>User List</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="rooms-tbody">
+                    <% rooms.forEach(room => { %>
+                        <tr data-roomname="<%= room.name.toLowerCase() %>" class="<%= room.isHidden ? 'hidden-row' : '' %>">
+                            <td><%= room.name %></td>
+                            <td><%= room.id %></td>
+                            <td><%= room.userCount %></td>
+                            <td><%= room.maxUsers %></td>
+                            <td><%= room.isHidden ? 'Yes' : 'No' %></td>
+                            <td><%= room.users.join(', ') %></td>
+                            <td>
+                                <% if (room.isHidden) { %>
+                                    <button class="unhide-btn" data-room-id="<%= room.id %>">Unhide</button>
+                                <% } else { %>
+                                    <button class="hide-btn" data-room-id="<%= room.id %>">Hide</button>
+                                <% } %>
+                                <button class="delete-btn" data-room-id="<%= room.id %>">Delete</button>
+                                <a href="/admin/download-log/<%= room.id %>" target="_blank" class="action-link download-link">Download Log</a>
+                            </td>
+                        </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Bans Section -->
+        <section class="section">
+            <h2>Current Bans (<span id="ban-count"><%= bans.length %></span>)</h2>
+            <!-- Add unban functionality if needed -->
+            <ul id="bans-list">
+                 <% bans.forEach(ban => { %>
+                    <li>
+                        <%= ban %>
+                        <!-- <button class="unban-btn" data-ban-value="<%= ban %>">Unban</button> -->
+                     </li>
+                 <% }); %>
+            </ul>
+        </section>
+
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/admin.js"></script> <!-- Your client-side admin logic -->
+</body>
+</html>
