@@ -1,44 +1,134 @@
-# Hello Node!
+# RealTime Chat
 
-This project includes a Node.js server script and a web page that connects to it. The front-end page presents a form the visitor can use to submit a color name, sending the submitted value to the back-end API running on the server. The server returns info to the page that allows it to update the display with the chosen color. 🎨
+A real-time chat application built with Node.js, Express, and Socket.IO that allows users to create and join chat rooms, share messages and images, and includes admin functionality for moderation.
 
-[Node.js](https://nodejs.org/en/about/) is a popular runtime that lets you run server-side JavaScript. This project uses the [Fastify](https://www.fastify.io/) framework and explores basic templating with [Handlebars](https://handlebarsjs.com/).
+## 🌟 Features
 
-_Last updated: 14 August 2023_
+### User Features
+- **User Authentication**: Simple username-based login system
+- **Room Management**: Create and join chat rooms with optional passwords
+- **Real-time Messaging**: Instant message delivery using Socket.IO
+- **Image Sharing**: Upload and share images within chat rooms
+- **URL Detection**: Automatically converts URLs to clickable links
+- **Notification System**: Sound notifications for new messages with volume control
+- **User Presence**: See who is currently in the chat room
 
-## Prerequisites
+### Admin Features
+- **Admin Panel**: Secure admin interface for monitoring and moderation
+- **User Management**: View connected users and their details (IP, location, room)
+- **Room Management**: View, hide, and delete rooms
+- **Moderation Tools**: Kick and ban users
+- **Room Logs**: Download chat logs for any room
 
-You'll get best use out of this project if you're familiar with basic JavaScript. If you've written JavaScript for client-side web pages this is a little different because it uses server-side JS, but the syntax is the same!
+### Security Features
+- **HTML Escaping**: Protection against XSS attacks
+- **Session Management**: Secure session handling
+- **Password Protection**: Optional password protection for rooms
+- **IP Banning**: Ban users by username or IP address
 
-## What's in this project?
+## 🛠️ Technology Stack
 
-← `README.md`: That’s this file, where you can tell people what your cool website does and how you built it.
+- **Backend**: Node.js with Express
+- **Real-time Communication**: Socket.IO
+- **Frontend**: HTML, CSS, JavaScript (Vanilla)
+- **Templating**: EJS
+- **Session Management**: express-session
+- **File Upload**: Multer
+- **Geolocation**: geoip-lite
+- **Data Storage**: Simple JSON file persistence
 
-← `public/style.css`: The styling rules for the pages in your site.
+## 📋 Prerequisites
 
-← `server.js`: The **Node.js** server script for your new site. The JavaScript defines the endpoints in the site back-end, one to return the homepage and one to update with the submitted color. Each one sends data to a Handlebars template which builds these parameter values into the web page the visitor sees.
+- Node.js (v14+)
+- npm
 
-← `package.json`: The NPM packages for your project's dependencies.
+## 🚀 Installation
 
-← `src/`: This folder holds the site template along with some basic data files.
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/realtime-chat.git
+   cd realtime-chat
+   ```
 
-← `src/pages/index.hbs`: This is the main page template for your site. The template receives parameters from the server script, which it includes in the page HTML. The page sends the user submitted color value in the body of a request, or as a query parameter to choose a random color.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-← `src/colors.json`: A collection of CSS color names. We use this in the server script to pick a random color, and to match searches against color names.
+3. Create a `.env` file in the root directory with the following variables:
+   ```
+   PORT=3000
+   SESSION_SECRET=your_secret_key_here
+   ADMIN_USER=admin
+   ADMIN_PASSWORD=your_admin_password
+   ```
 
-← `src/seo.json`: When you're ready to share your new site or add a custom domain, change SEO/meta settings in here.
+4. Start the server:
+   ```bash
+   npm start
+   ```
 
-## Try this next 🏗️
+5. Access the application at `http://localhost:3000`
 
-Take a look in `TODO.md` for next steps you can try out in your new site!
+## 📁 Project Structure
 
-___Want a minimal version of this project to build your own Node.js app? Check out [Blank Node](https://glitch.com/edit/#!/remix/glitch-blank-node)!___
+```
+├── public/              # Static files
+│   ├── css/             # CSS stylesheets
+│   ├── js/              # Client-side JavaScript
+│   └── uploads/         # Uploaded images
+├── views/               # EJS templates
+│   ├── login.ejs        # Login page
+│   ├── main.ejs         # Room selection page
+│   ├── room.ejs         # Chat room page
+│   ├── admin_login.ejs  # Admin login page
+│   └── admin_panel.ejs  # Admin dashboard
+├── .env                 # Environment variables
+├── package.json         # Project dependencies
+├── server.js            # Main application file
+└── README.md            # This file
+```
 
-![Glitch](https://cdn.glitch.com/a9975ea6-8949-4bab-addb-8a95021dc2da%2FLogo_Color.svg?v=1602781328576)
+## 💡 Usage
 
-## You built this with Glitch!
+### Regular User Flow
+1. Register with a username on the login page
+2. Create a new room or join an existing one
+3. Chat with other users in real-time
+4. Share images and URLs
 
-[Glitch](https://glitch.com) is a friendly community where millions of people come together to build web apps and websites.
+### Admin Flow
+1. Access the admin panel via `/admin-login`
+2. Log in with admin credentials
+3. Monitor active users and rooms
+4. Moderate content and users as needed
 
-- Need more help? [Check out our Help Center](https://help.glitch.com/) for answers to any common questions.
-- Ready to make it official? [Become a paid Glitch member](https://glitch.com/pricing) to boost your app with private sharing, more storage and memory, domains and more.
+## 🔒 Security Considerations
+
+This application includes basic security measures but should be enhanced for production use:
+
+- Password hashing for room and admin passwords
+- Rate limiting to prevent abuse
+- HTTPS configuration
+- More robust authentication system
+- Input validation and sanitization
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a pull request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 📧 Contact
+
+Your Name - your.email@example.com
+
+Project Link: [https://github.com/yourusername/realtime-chat](https://github.com/yourusername/realtime-chat)
