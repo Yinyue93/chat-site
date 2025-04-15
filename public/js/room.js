@@ -799,6 +799,137 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn("[RoomJS] Image upload button or input not found."); // Added warning if elements are missing
     }
 
+        // --- Clipboard Image Paste ---
+    console.log("[RoomJS] Setting up clipboard image paste functionality...");
+    
+    // Function to handle clipboard paste events
+    function handlePaste(e) {
+        console.log("[RoomJS] Paste event detected");
+        
+        // Check if we're pasting into the message input field
+        const activeElement = document.activeElement;
+        if (activeElement !== messageInput) {
+            console.log("[RoomJS] Paste not in message input, ignoring");
+            return; // Only process pastes in the message input
+        }
+        
+        // Check for clipboard data
+        if (!e.clipboardData || !e.clipboardData.items) {
+            console.log("[RoomJS] No clipboard data found");
+            return;
+        }
+        
+        // Look for images in pasted content
+        const items = e.clipboardData.items;
+        let imageItem = null;
+        
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                console.log("[RoomJS] Found image in clipboard: ", items[i].type);
+                imageItem = items[i];
+                break;
+            }
+        }
+        
+        // If no image is found, let the default paste behavior continue
+        if (!imageItem) {
+            console.log("[RoomJS] No image found in clipboard, continuing with normal paste");
+            return;
+        }
+        
+        // Prevent the default paste behavior since we're handling an image
+        e.preventDefault();
+        
+        // Get the image as a file
+        const blob = imageItem.getAsFile();
+        if (!blob) {
+            console.log("[RoomJS] Failed to get image as file");
+            return;
+        }
+        
+        // Generate a unique filename
+        const timestamp = new Date().getTime();
+        const filename = `pasted-image-${timestamp}.png`;
+        
+        // Create a File object from the blob
+        const file = new File([blob], filename, { type: blob.type });
+        console.log("[RoomJS] Created file from pasted image:", file.name, "Type:", file.type, "Size:", file.size, "bytes");
+        
+        // Check file size (limit to 2MB like in the upload handler)
+        if (file.size > 2 * 1024 * 1024) {
+            console.error("[RoomJS] Pasted image is too large:", file.size, "bytes");
+            logMessage(`<div class="system-message" style="color:red;">Error: Pasted image must be smaller than 2MB.</div>`);
+            return;
+        }
+        
+        // Show uploading message
+        logMessage(`<div class="system-message">Uploading pasted image...</div>`);
+        
+        // Create FormData for upload
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        // Use the existing upload mechanism
+        console.log("[RoomJS] Uploading pasted image to /upload/" + roomId);
+        fetch('/upload/' + roomId, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            console.log("[RoomJS] Paste upload response status:", response.status);
+            // Check if response is ok (status in the range 200-299)
+            if (!response.ok) {
+                // Attempt to parse error message from JSON response, otherwise use status text
+                return response.json().catch(() => {
+                    // If JSON parsing fails, throw error with status text
+                    throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
+                }).then(errorData => {
+                    // If JSON parsing succeeds, throw error with the message from the server
+                    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json(); // Parse JSON body for successful responses
+        })
+        .then(data => {
+            console.log("[RoomJS] Paste upload response data:", data);
+            // Server should send back { success: true, imageUrl: '...' } or { success: false, message: '...' }
+            if (data.success) {
+                console.log("[RoomJS] Paste upload successful:", data.imageUrl);
+                // Success! The server will emit a socket event to all clients
+                logMessage(`<div class="system-message" style="color:green;">Pasted image uploaded successfully!</div>`);
+            } else {
+                // This case might be handled by the !response.ok check now, but keep for explicit server failure message
+                console.error("[RoomJS] Paste upload failed:", data.message);
+                logMessage(`<div class="system-message" style="color:red;">Paste upload failed: ${escapeHtml(data.message || 'Unknown server error')}</div>`);
+            }
+        })
+        .catch(error => {
+            console.error("[RoomJS] Paste upload error:", error);
+            // Display the error message caught from fetch or thrown from .then block
+            logMessage(`<div class="system-message" style="color:red;">Paste upload error: ${escapeHtml(error.message)}</div>`);
+        });
+    }
+    
+    // Add the paste event listener to the document
+    document.addEventListener('paste', handlePaste);
+    
+    // Add a visual indicator to let users know they can paste images
+    if (messageInput) {
+        const pasteHint = document.createElement('div');
+        pasteHint.className = 'paste-hint';
+        pasteHint.innerHTML = '<i class="fas fa-paste"></i> <small>You can paste images directly</small>';
+        pasteHint.style.fontSize = '0.8em';
+        pasteHint.style.color = '#666';
+        pasteHint.style.marginTop = '4px';
+        
+        // Insert the hint after the message input
+        if (messageInput.parentNode) {
+            messageInput.parentNode.insertBefore(pasteHint, messageInput.nextSibling);
+        }
+    }
+    
+    console.log("[RoomJS] Clipboard image paste functionality set up.");    
+
     // --- Test Sound Button ---
     const testSoundBtn = document.getElementById('test-sound');
     if (testSoundBtn) {
