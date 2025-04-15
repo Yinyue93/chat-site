@@ -913,21 +913,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add the paste event listener to the document
     document.addEventListener('paste', handlePaste);
     
-    // Add a visual indicator to let users know they can paste images
-    if (messageInput) {
-        const pasteHint = document.createElement('div');
-        pasteHint.className = 'paste-hint';
-        pasteHint.innerHTML = '<i class="fas fa-paste"></i> <small>You can paste images directly</small>';
-        pasteHint.style.fontSize = '0.8em';
-        pasteHint.style.color = '#666';
-        pasteHint.style.marginTop = '4px';
-        
-        // Insert the hint after the message input
-        if (messageInput.parentNode) {
-            messageInput.parentNode.insertBefore(pasteHint, messageInput.nextSibling);
-        }
-    }
-    
     console.log("[RoomJS] Clipboard image paste functionality set up.");    
 
     // --- Test Sound Button ---
