@@ -271,6 +271,10 @@ app.post('/create-room', requireLogin, (req, res) => {
         createdAt: Date.now()
     };
     console.log(`Room created: '${roomName}' (${roomId}) by ${creator}`);
+    io.emit('roomListUpdate', {
+        rooms: getRoomInfoList(),
+        connectedUsers: io.sockets.sockets.size // Total connected users
+    });
     
     // ADD THIS CODE: Grant access to the creator if a password was set
     if (password) {
