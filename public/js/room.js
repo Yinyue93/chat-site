@@ -118,33 +118,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         // Form submission
-        settingsForm.addEventListener('submit', (event) => {
-            event.preventDefault();
-            
-            const newRoomName = roomNameInput.value.trim();
-            const newMaxUsers = parseInt(maxUsersInput.value, 10);
-            
-            // Basic validation
-            if (newRoomName.length < 3 || newRoomName.length > 30) {
-                alert('Room name must be between 3 and 30 characters');
-                return;
-            }
-            
-            if (isNaN(newMaxUsers) || newMaxUsers < 1 || newMaxUsers > 100) {
-                alert('Maximum users must be between 1 and 100');
-                return;
-            }
-            
-            // Only send update if values actually changed
-            if (newRoomName !== currentRoomName || newMaxUsers !== currentMaxUsers) {
-                // Send update request to server
-                socket.emit('updateRoomSettings', {
-                    roomId: roomId,
-                    roomName: newRoomName,
-                    maxUsers: newMaxUsers
-                });
-                
-                logMessage(`<div class="system-message">Updating room settings...</div>`);
+        settingsForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            
+            const newRoomName = roomNameInput.value.trim();
+            const newMaxUsers = parseInt(maxUsersInput.value, 10);
+            
+            // Basic validation
+            if (newRoomName.length < 3 || newRoomName.length > 30) {
+                alert('Room name must be between 3 and 30 characters');
+                return;
+            }
+            
+            if (isNaN(newMaxUsers) || newMaxUsers < 1 || newMaxUsers > 100) {
+                alert('Maximum users must be between 1 and 100');
+                return;
+            }
+            
+            // Always send update regardless of change
+            socket.emit('updateRoomSettings', {
+                roomId: roomId,
+                roomName: newRoomName,
+                maxUsers: newMaxUsers
+            });
+            
+            logMessage(`<div class="system-message">Updating room settings...</div>`);
+        });
             } else {
                 // No changes made
                 closeModal();
