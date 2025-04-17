@@ -144,11 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             logMessage(`<div class="system-message">Updating room settings...</div>`);
         });
-            } else {
-                // No changes made
-                closeModal();
-            }
-        });
         
         // Helper function to open modal
         function openModal() {
