@@ -189,6 +189,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (roomCount && roomCount.textContent) {
                 const currentCount = parseInt(roomCount.textContent) - 1;
                 roomCount.textContent = currentCount;
+
+                // If that was the last room, show the "no rooms" message
+                if (currentCount === 0) {
+                    roomList.innerHTML = '<p class="no-rooms">No rooms available yet. Create one below!</p>';
+                }
             }
         }
     });
