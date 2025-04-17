@@ -572,8 +572,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Add back user list listener
-    socket.on('updateUserList', updateUserList); // Use helper function
-
+    socket.on('updateUserList', (users) => {
+        console.log("[RoomJS] Received 'updateUserList':", users);
+        if (!userList) return;
+        if (Array.isArray(users)) {
+            userList.innerHTML = ''; // Clear list
+            users.forEach(user => {
+                const li = document.createElement('li');
+                li.textContent = escapeHtml(user); // Escape username
+                userList.appendChild(li);
+            });
+            
+            // Update the current user count in the header
+            const currentUserCount = document.getElementById('current-user-count');
+            if (currentUserCount) {
+                currentUserCount.textContent = users.length;
+            }
+        } else {
+            console.error("[RoomJS] Invalid 'updateUserList' data.");
+        }
+    });
 
     socket.on('userJoined', (entry) => {
         console.log("[RoomJS] Received 'userJoined':", entry);
@@ -624,13 +642,21 @@ document.addEventListener('DOMContentLoaded', () => {
             
             console.log(`[RoomJS] Updated room settings cache: Name=${currentRoomName}, MaxUsers=${currentMaxUsers}`);
             
-            // Update page title if needed
+            // Update page title
             document.title = `Chat: ${escapeHtml(currentRoomName)}`;
             
-            // If there's a room header element, update it
+            // Update room header name
             const roomHeader = document.querySelector('.room-header h1');
             if (roomHeader) {
                 roomHeader.textContent = escapeHtml(currentRoomName);
+            }
+            
+            // Update user count in the header
+            const currentUserCount = document.getElementById('current-user-count');
+            const maxUserCount = document.getElementById('max-user-count');
+            if (currentUserCount && maxUserCount) {
+                currentUserCount.textContent = roomData.currentUsers || '0';
+                maxUserCount.textContent = roomData.maxUsers;
             }
         }
     });
@@ -649,22 +675,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update page title
             document.title = `Chat: ${escapeHtml(currentRoomName)}`;
             
-            // If there's a room header element, update it to show both name and max users
+            // Update room header with name and max users
             const roomHeader = document.querySelector('.room-header h1');
             if (roomHeader) {
                 roomHeader.textContent = escapeHtml(currentRoomName);
-                
-                // Add or update a max users display in the header section
-                let maxUsersDisplay = document.querySelector('.room-header .max-users-display');
-                if (!maxUsersDisplay) {
-                    maxUsersDisplay = document.createElement('span');
-                    maxUsersDisplay.className = 'max-users-display';
-                    maxUsersDisplay.style.fontSize = '0.8em';
-                    maxUsersDisplay.style.color = '#666';
-                    maxUsersDisplay.style.marginLeft = '10px';
-                    document.querySelector('.room-header').appendChild(maxUsersDisplay);
-                }
-                maxUsersDisplay.textContent = `Max users: ${currentMaxUsers}`;
+            }
+            
+            // Update max users count in the header
+            const maxUserCount = document.getElementById('max-user-count');
+            if (maxUserCount) {
+                maxUserCount.textContent = currentMaxUsers;
             }
             
             // Close the modal
