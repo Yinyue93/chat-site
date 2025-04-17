@@ -640,29 +640,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // New socket event handler for settings update result
     socket.on('roomSettingsUpdated', (result) => {
-        if (result.success) {
-            logMessage(`<div class="system-message" style="color:green;">Room settings updated successfully!</div>`);
-            
-            // Update our cached values
-            currentRoomName = result.roomName;
-            currentMaxUsers = result.maxUsers;
-            
-            // Update page title
-            document.title = `Chat: ${escapeHtml(currentRoomName)}`;
-            
-            // If there's a room header element, update it
-            const roomHeader = document.querySelector('.room-header h1');
-            if (roomHeader) {
-                roomHeader.textContent = escapeHtml(currentRoomName);
-            }
-            
-            // Close the modal
-            closeModal();
-        } else {
-            logMessage(`<div class="system-message" style="color:red;">Failed to update room settings: ${escapeHtml(result.message)}</div>`);
-        }
+        if (result.success) {
+            logMessage(`<div class="system-message" style="color:green;">Room settings updated successfully!</div>`);
+            
+            // Update our cached values
+            currentRoomName = result.roomName;
+            currentMaxUsers = result.maxUsers;
+            
+            // Update page title
+            document.title = `Chat: ${escapeHtml(currentRoomName)}`;
+            
+            // If there's a room header element, update it to show both name and max users
+            const roomHeader = document.querySelector('.room-header h1');
+            if (roomHeader) {
+                roomHeader.textContent = escapeHtml(currentRoomName);
+                
+                // Add or update a max users display in the header section
+                let maxUsersDisplay = document.querySelector('.room-header .max-users-display');
+                if (!maxUsersDisplay) {
+                    maxUsersDisplay = document.createElement('span');
+                    maxUsersDisplay.className = 'max-users-display';
+                    maxUsersDisplay.style.fontSize = '0.8em';
+                    maxUsersDisplay.style.color = '#666';
+                    maxUsersDisplay.style.marginLeft = '10px';
+                    document.querySelector('.room-header').appendChild(maxUsersDisplay);
+                }
+                maxUsersDisplay.textContent = `Max users: ${currentMaxUsers}`;
+            }
+            
+            // Close the modal
+            closeModal();
+        } else {
+            logMessage(`<div class="system-message" style="color:red;">Failed to update room settings: ${escapeHtml(result.message)}</div>`);
+        }
     });
-
 
     console.log("[RoomJS] Core event listeners attached.");
 
