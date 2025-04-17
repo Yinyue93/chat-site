@@ -218,13 +218,10 @@ app.post('/login', (req, res) => {
         // Get the current number of connected users
         const connectedUsers = io.sockets.sockets.size;
 
-        // Emit the updated room list and connected users count
-        // io.on("connection", (socket) => {
-        //     socket.broadcast.emit('roomListUpdate', {
-        //         rooms: getRoomInfoList(),
-        //         connectedUsers: connectedUsers
-        //     });
-        // })
+        io.to('main_lobby').emit('roomListUpdate', {
+            rooms: getRoomInfoList(),
+            connectedUsers: io.sockets.sockets.size
+        });
         
         res.redirect('/main');
     });
@@ -240,6 +237,10 @@ app.post('/logout', (req, res) => {
         // Clear the cookie explicitly associated with express-session
         res.clearCookie('connect.sid'); // Default cookie name, adjust if changed in config
         // console.log(`User logged out: ${username || '(unknown)'}`);
+
+        setTimeout(() => {
+            io.to('main_lobby').emit('userCountUpdate', io.sockets.sockets.size);
+        }, 100);
 
         res.redirect('/'); // Redirect to login page
     });
@@ -489,6 +490,10 @@ io.on('connection', (socket) => {
     // Notify admin panel about the new connection immediately
     if (io.sockets.adapter.rooms.has('admin_room')) {
         io.to('admin_room').emit('adminUpdate', getAdminData());
+    }
+
+    if (io.sockets.adapter.rooms.has('main_lobby')) {
+        io.to('main_lobby').emit('userCountUpdate', io.sockets.sockets.size);
     }
 
     // --- Handle Main Lobby Join ---
@@ -949,8 +954,8 @@ io.on('connection', (socket) => {
 
          // Update total user count for main lobby (if anyone is there)
          if (io.sockets.adapter.rooms.has('main_lobby')) {
-             io.to('main_lobby').emit('totalUserUpdate', io.sockets.sockets.size);
-         }
+            io.to('main_lobby').emit('userCountUpdate', io.sockets.sockets.size);
+        }
     });
 });
 
