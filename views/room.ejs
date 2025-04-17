@@ -102,7 +102,7 @@
             background-color: #5a6268;
         }
         
-        /* Room header with title and settings button */
+        /* Updated Room header styles */
         .room-header {
             display: flex;
             justify-content: space-between;
@@ -113,6 +113,17 @@
             margin: 0;
             border-bottom: none;
             padding-bottom: 0;
+            flex: 1; /* Take up left portion */
+        }
+        .user-count-display {
+            font-size: 1.1em;
+            color: #555;
+            padding: 0 20px;
+            text-align: center;
+            font-weight: bold;
+        }
+        #settings-button {
+            flex-shrink: 0; /* Prevent shrinking */
         }
         
         /* Modal Styles */
@@ -221,9 +232,12 @@
     data-room-name="<%= roomName %>">
 
     <div class="chat-container">
-        <!-- Modified header section with settings button -->
+        <!-- Modified header section with user count and settings button -->
         <div class="room-header">
             <h1><%= roomName %></h1>
+            <div class="user-count-display">
+                <span id="current-user-count">0</span>/<span id="max-user-count"><%= typeof maxUsers !== 'undefined' ? maxUsers : '10' %></span>
+            </div>
             <button id="settings-button" class="control-button" title="Room Settings">
                 <i class="fas fa-cog"></i> Settings
             </button>
