@@ -168,6 +168,37 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSingleRoom(updatedRoom);
     });
 
+    socket.on('roomDeleted', (roomId) => {
+        console.log('[MainJS] Received roomDeleted event for room:', roomId);
+    
+    // Find and remove the room from the list or refresh the entire list
+    const roomElements = roomList.querySelectorAll('li');
+    let roomRemoved = false;
+    
+    roomElements.forEach(li => {
+        const roomLink = li.querySelector('a');
+        const roomUrl = roomLink.getAttribute('href');
+        const liRoomId = roomUrl.split('/').pop(); // Extract room ID from URL
+        
+        if (liRoomId === roomId) {
+            li.remove();
+            roomRemoved = true;
+            console.log('[MainJS] Removed deleted room from list:', roomId);
+            
+            // Update the room count if element exists
+            if (roomCount && roomCount.textContent) {
+                const currentCount = parseInt(roomCount.textContent) - 1;
+                roomCount.textContent = currentCount;
+            }
+        }
+    });
+    
+    if (!roomRemoved) {
+        // If room wasn't found, refresh the entire list
+        socket.emit('joinMainLobby'); // Request a full room list refresh
+    }
+});
+
     socket.on('disconnect', (reason) => {
         console.warn(`[MainJS] Disconnected. Reason: ${reason}`);
     });
