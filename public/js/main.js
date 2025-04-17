@@ -170,6 +170,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('roomDeleted', (roomId) => {
         console.log('[MainJS] Received roomDeleted event for room:', roomId);
+
+    socket.on('userCountUpdate', (count) => {
+        console.log('[MainJS] Received userCountUpdate event:', count);
+        
+        // Update user count if the element exists
+        if (userCount) {
+            userCount.classList.remove('loading-data');
+            userCount.style.color = '';
+            userCount.textContent = count;
+        }
+    });
     
     // Find and remove the room from the list or refresh the entire list
     const roomElements = roomList.querySelectorAll('li');
