@@ -247,11 +247,13 @@ app.post('/logout', (req, res) => {
 
 // --- Main Room List ---
 app.get('/main', requireLogin, (req, res) => {
-    // Pass necessary data to the main page template
+    const connectedUsers = io.sockets.sockets.size;
+    
     res.render('main', {
         username: req.session.username,
         rooms: getRoomInfoList(),
-        isAdmin: req.session.isAdmin || false // Pass admin status
+        isAdmin: req.session.isAdmin || false,
+        connectedUsers: connectedUsers // Add initial user count
     });
 });
 
