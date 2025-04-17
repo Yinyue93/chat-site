@@ -1,4 +1,5 @@
-// public/js/main.js
+// public/js/main.js - Updates to improve user count handling
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log("[MainJS] DOM Ready.");
 
@@ -148,6 +149,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Helper: Update User Count With Animation ---
+    function updateUserCountWithAnimation(count) {
+        if (!userCount) return;
+        
+        // Add a brief highlight animation
+        userCount.style.transition = 'background-color 0.5s ease';
+        userCount.style.backgroundColor = '#ffff99'; // Subtle yellow highlight
+        
+        // Update the text
+        userCount.textContent = count;
+        
+        // Remove the highlight after a delay
+        setTimeout(() => {
+            userCount.style.backgroundColor = 'transparent';
+        }, 1000);
+    }
+
     // --- Socket Event Listeners ---
     socket.on('connect', () => {
         console.log(`[MainJS] Connected. Socket ID: ${socket.id}`);
@@ -158,8 +176,14 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[MainJS] Received roomListUpdate event');
         updateRoomList(data.rooms);
         if (userCount && typeof data.connectedUsers === 'number') {
-            userCount.textContent = data.connectedUsers;
+            updateUserCountWithAnimation(data.connectedUsers);
         }
+    });
+
+    // Enhanced userCountUpdate handler with animation
+    socket.on('userCountUpdate', (count) => {
+        console.log('[MainJS] Received userCountUpdate event:', count);
+        updateUserCountWithAnimation(count);
     });
 
     // New event listener for single room updates
@@ -171,56 +195,59 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('roomDeleted', (roomId) => {
         console.log('[MainJS] Received roomDeleted event for room:', roomId);
 
-    socket.on('userCountUpdate', (count) => {
-        console.log('[MainJS] Received userCountUpdate event:', count);
+        // Find and remove the room from the list or refresh the entire list
+        const roomElements = roomList.querySelectorAll('li');
+        let roomRemoved = false;
         
-        // Update user count if the element exists
-        if (userCount) {
-            userCount.classList.remove('loading-data');
-            userCount.style.color = '';
-            userCount.textContent = count;
-        }
-    });
-    
-    // Find and remove the room from the list or refresh the entire list
-    const roomElements = roomList.querySelectorAll('li');
-    let roomRemoved = false;
-    
-    roomElements.forEach(li => {
-        const roomLink = li.querySelector('a');
-        const roomUrl = roomLink.getAttribute('href');
-        const liRoomId = roomUrl.split('/').pop(); // Extract room ID from URL
-        
-        if (liRoomId === roomId) {
-            li.remove();
-            roomRemoved = true;
-            console.log('[MainJS] Removed deleted room from list:', roomId);
+        roomElements.forEach(li => {
+            const roomLink = li.querySelector('a');
+            const roomUrl = roomLink.getAttribute('href');
+            const liRoomId = roomUrl.split('/').pop(); // Extract room ID from URL
             
-            // Update the room count if element exists
-            if (roomCount && roomCount.textContent) {
-                const currentCount = parseInt(roomCount.textContent) - 1;
-                roomCount.textContent = currentCount;
+            if (liRoomId === roomId) {
+                li.remove();
+                roomRemoved = true;
+                console.log('[MainJS] Removed deleted room from list:', roomId);
+                
+                // Update the room count if element exists
+                if (roomCount && roomCount.textContent) {
+                    const currentCount = parseInt(roomCount.textContent) - 1;
+                    roomCount.textContent = currentCount;
 
-                // If that was the last room, show the "no rooms" message
-                if (currentCount === 0) {
-                    roomList.innerHTML = '<p class="no-rooms">No rooms available yet. Create one below!</p>';
+                    // If that was the last room, show the "no rooms" message
+                    if (currentCount === 0) {
+                        roomList.innerHTML = '<p class="no-rooms">No rooms available yet. Create one below!</p>';
+                    }
                 }
             }
+        });
+        
+        if (!roomRemoved) {
+            // If room wasn't found, refresh the entire list
+            socket.emit('joinMainLobby'); // Request a full room list refresh
         }
     });
-    
-    if (!roomRemoved) {
-        // If room wasn't found, refresh the entire list
-        socket.emit('joinMainLobby'); // Request a full room list refresh
-    }
-});
 
     socket.on('disconnect', (reason) => {
         console.warn(`[MainJS] Disconnected. Reason: ${reason}`);
+        
+        // Visually indicate disconnection to user
+        if (userCount) {
+            userCount.classList.add('loading-data');
+            userCount.style.color = '#999';
+            userCount.textContent = '...';
+        }
     });
 
     socket.on('connect_error', (err) => {
         console.error(`[MainJS] Connection Error: ${err.message}`);
+        
+        // Visually indicate connection error to user
+        if (userCount) {
+            userCount.classList.add('loading-data');
+            userCount.style.color = 'red';
+            userCount.textContent = '!';
+        }
     });
 
     console.log("[MainJS] Setup complete.");
