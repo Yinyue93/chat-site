@@ -878,32 +878,25 @@ io.on('connection', (socket) => {
         if (roomToToggle) {
             roomToToggle.isHidden = !roomToToggle.isHidden;
             const status = roomToToggle.isHidden ? 'hidden' : 'visible';
-            // console.log(`Admin ${socket.username} toggled room ${roomToToggle.name} to ${status}`);
-
-             // Notify main lobby about hide/show status change
+            console.log(`Admin ${socket.username} toggled room ${roomToToggle.name} to ${status}`);
+    
+            // Notify main lobby with a FULL room list update
             if (io.sockets.adapter.rooms.has('main_lobby')) {
-                 if (roomToToggle.isHidden) {
-                      io.to('main_lobby').emit('roomHidden', roomIdToToggle); // Send ID of hidden room
-                 } else {
-                      // If made visible, send the full room info
-                      const lobbyRoomInfo = {
-                           id: roomIdToToggle,
-                           name: roomToToggle.name,
-                           userCount: roomToToggle.users.size,
-                           maxUsers: roomToToggle.maxUsers,
-                           hasPassword: !!roomToToggle.password
-                      };
-                      io.to('main_lobby').emit('roomShown', lobbyRoomInfo);
-                 }
-                //  console.log(`Notified main lobby of room visibility change: ${roomIdToToggle}`);
+                // Send a complete room list update instead of individual events
+                const connectedUsers = io.sockets.sockets.size;
+                io.to('main_lobby').emit('roomListUpdate', {
+                    rooms: getRoomInfoList(),  // This already filters out hidden rooms
+                    connectedUsers: connectedUsers
+                });
+                console.log(`Sent full room list update to main lobby after visibility change`);
             }
-
+    
             // Update admin panel
             if (io.sockets.adapter.rooms.has('admin_room')) {
-               io.to('admin_room').emit('adminUpdate', getAdminData());
+                io.to('admin_room').emit('adminUpdate', getAdminData());
             }
         } else {
-             socket.emit('errorMsg', 'Room not found, cannot toggle hidden status.');
+            socket.emit('errorMsg', 'Room not found, cannot toggle hidden status.');
         }
     });
 
