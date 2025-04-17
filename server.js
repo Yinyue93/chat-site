@@ -198,30 +198,28 @@ app.post('/login', (req, res) => {
     }
     // Basic check for banned username/IP
     if (dbData.bans.includes(username) || dbData.bans.includes(ip)) {
-        //  console.log(`Banned login attempt: User '${username}', IP '${ip}'`);
-         return res.render('login', { error: 'You are banned from this service.' });
+        return res.render('login', { error: 'You are banned from this service.' });
     }
-     // Crude check for existing username (prone to race conditions, better handled by socket join)
-    // if (userSockets.has(username)) {
-    //     return res.render('login', { error: 'Username appears to be taken. Try another.' });
-    // }
 
     // Store user info in session
     req.session.username = username;
     req.session.isAdmin = false; // Regular users are not admins
     req.session.save(err => { // Ensure session is saved before redirecting
          if (err) {
-            //   console.error("Session save error during login:", err);
               return res.render('login', { error: 'Login failed, please try again.' });
          }
-        //  console.log(`User logged in: ${username}`);
+        
         // Get the current number of connected users
         const connectedUsers = io.sockets.sockets.size;
 
+        // Broadcast both events - this ensures all clients get both updates
         io.to('main_lobby').emit('roomListUpdate', {
             rooms: getRoomInfoList(),
-            connectedUsers: io.sockets.sockets.size
+            connectedUsers: connectedUsers
         });
+        
+        // Add this explicit userCountUpdate broadcast 
+        io.to('main_lobby').emit('userCountUpdate', connectedUsers);
         
         res.redirect('/main');
     });
@@ -236,11 +234,14 @@ app.post('/logout', (req, res) => {
         }
         // Clear the cookie explicitly associated with express-session
         res.clearCookie('connect.sid'); // Default cookie name, adjust if changed in config
-        // console.log(`User logged out: ${username || '(unknown)'}`);
 
-        setTimeout(() => {
-            io.to('main_lobby').emit('userCountUpdate', io.sockets.sockets.size);
-        }, 100);
+        // Remove setTimeout and broadcast immediately
+        const connectedUsers = io.sockets.sockets.size;
+        io.to('main_lobby').emit('userCountUpdate', connectedUsers);
+        io.to('main_lobby').emit('roomListUpdate', {
+            rooms: getRoomInfoList(),
+            connectedUsers: connectedUsers
+        });
 
         res.redirect('/'); // Redirect to login page
     });
@@ -494,6 +495,19 @@ io.on('connection', (socket) => {
 
     if (io.sockets.adapter.rooms.has('main_lobby')) {
         io.to('main_lobby').emit('userCountUpdate', io.sockets.sockets.size);
+    }
+
+    // Auto-join main_lobby on connection unless specifically in a room
+    if (socket.username) {
+        // Auto-join main_lobby on connection unless specifically in a room
+        if (!socket.currentRoom) {
+            socket.join('main_lobby');
+            console.log(`User ${socket.username} auto-joined main lobby`);
+            
+            // Notify everyone about updated user count immediately
+            const connectedUsers = io.sockets.sockets.size;
+            io.to('main_lobby').emit('userCountUpdate', connectedUsers);
+        }
     }
 
     // --- Handle Main Lobby Join ---
@@ -953,8 +967,15 @@ io.on('connection', (socket) => {
         }
 
          // Update total user count for main lobby (if anyone is there)
-         if (io.sockets.adapter.rooms.has('main_lobby')) {
-            io.to('main_lobby').emit('userCountUpdate', io.sockets.sockets.size);
+        if (io.sockets.adapter.rooms.has('main_lobby')) {
+            const connectedUsers = io.sockets.sockets.size;
+            io.to('main_lobby').emit('userCountUpdate', connectedUsers);
+            
+            // Also send roomListUpdate for consistency
+            io.to('main_lobby').emit('roomListUpdate', {
+                rooms: getRoomInfoList(),
+                connectedUsers: connectedUsers
+            });
         }
     });
 });
