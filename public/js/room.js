@@ -93,15 +93,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxUsersInput = document.getElementById('max-users-input');
     const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
 
+    // Initialize settings data
+    let currentRoomName = body?.dataset?.roomName || '';
+    let currentMaxUsers = 10; // Default value, will be updated when we get room info
+
     // Check for settings elements
     if (!settingsButton || !settingsModal || !settingsForm || !roomNameInput || !maxUsersInput) {
         console.error("[RoomJS] One or more settings elements not found");
     } else {
         console.log("[RoomJS] Settings elements found, initializing settings functionality");
-        
-        // Initialize settings data
-        let currentRoomName = body?.dataset?.roomName || '';
-        let currentMaxUsers = 10; // Default value, will be updated when we get room info
         
         // Button click handler to open the modal
         settingsButton.addEventListener('click', openModal);
@@ -144,24 +144,24 @@ document.addEventListener('DOMContentLoaded', () => {
             
             logMessage(`<div class="system-message">Updating room settings...</div>`);
         });
-        
-        // Helper function to open modal
-        function openModal() {
-            // Fill form with current values
-            roomNameInput.value = currentRoomName;
-            maxUsersInput.value = currentMaxUsers;
-            
-            // Show modal
-            settingsModal.style.display = 'block';
-        }
-        
-        // Helper function to close modal
-        function closeModal() {
-            settingsModal.style.display = 'none';
-        }
 
         console.log("[RoomJS] Settings event listeners attached");
     }
+
+    // Helper function to open modal
+    function openModal() {
+        // Fill form with current values
+        roomNameInput.value = currentRoomName;
+        maxUsersInput.value = currentMaxUsers;
+        
+        // Show modal
+        settingsModal.style.display = 'block';
+        }
+        
+    // Helper function to close modal
+    function closeModal() {
+        settingsModal.style.display = 'none';
+        }
 
 
     // --- Attempt Connection ---
@@ -616,20 +616,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add this with your other socket event handlers
     socket.on('roomInfo', (roomData) => {
-        console.log("[RoomJS] Received room info:", roomData);
-        if (roomData && roomData.name && roomData.maxUsers) {
-            currentRoomName = roomData.name;
-            currentMaxUsers = roomData.maxUsers;
-            
-            // Update page title if needed
-            document.title = `Chat: ${escapeHtml(currentRoomName)}`;
-            
-            // If there's a room header element, update it
-            const roomHeader = document.querySelector('.room-header h1');
-            if (roomHeader) {
-                roomHeader.textContent = escapeHtml(currentRoomName);
-            }
-        }
+        console.log("[RoomJS] Received room info:", roomData);
+        if (roomData && roomData.name && roomData.maxUsers) {
+            // Update the cached values
+            currentRoomName = roomData.name;
+            currentMaxUsers = roomData.maxUsers;
+            
+            console.log(`[RoomJS] Updated room settings cache: Name=${currentRoomName}, MaxUsers=${currentMaxUsers}`);
+            
+            // Update page title if needed
+            document.title = `Chat: ${escapeHtml(currentRoomName)}`;
+            
+            // If there's a room header element, update it
+            const roomHeader = document.querySelector('.room-header h1');
+            if (roomHeader) {
+                roomHeader.textContent = escapeHtml(currentRoomName);
+            }
+        }
     });
 
     // New socket event handler for settings update result
@@ -640,6 +643,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update our cached values
             currentRoomName = result.roomName;
             currentMaxUsers = result.maxUsers;
+            
+            console.log(`[RoomJS] Settings updated: Name=${currentRoomName}, MaxUsers=${currentMaxUsers}`);
             
             // Update page title
             document.title = `Chat: ${escapeHtml(currentRoomName)}`;
