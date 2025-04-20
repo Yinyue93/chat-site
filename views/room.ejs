@@ -224,6 +224,19 @@
             background-color: #f8f9fa;
             border: 1px solid #ddd;
         }
+
+        .typing-indicator {
+            padding: 5px 10px;
+            color: #666;
+            font-style: italic;
+            font-size: 0.9em;
+            min-height: 20px;
+            display: none; /* Hidden by default */
+        }
+
+        .typing-indicator.visible {
+            display: block;
+        }
     </style>
 </head>
 <body
@@ -246,6 +259,7 @@
         <div id="chat-log">
             <!-- Chat messages will appear here -->
         </div>
+        <div id="typing-indicator" class="typing-indicator"></div>
         <div class="message-input-area">
             <input type="text" id="message-input" placeholder="Type your message..." autofocus>
             <button id="sound-toggle" title="Turn notification sounds off">

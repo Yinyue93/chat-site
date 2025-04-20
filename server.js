@@ -653,6 +653,25 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Handle typing indicators
+    socket.on('userTyping', () => {
+        if (!socket.username || !socket.currentRoom) return;
+        
+        // Broadcast to all other users in the room that this user is typing
+        socket.to(socket.currentRoom).emit('userTyping', {
+            username: socket.username
+        });
+    });
+
+    socket.on('userStoppedTyping', () => {
+        if (!socket.username || !socket.currentRoom) return;
+        
+        // Broadcast to all other users in the room that this user stopped typing
+        socket.to(socket.currentRoom).emit('userStoppedTyping', {
+            username: socket.username
+        });
+    });
+
     // --- Handle Room Settings Update ---
     socket.on('updateRoomSettings', ({ roomId, roomName, maxUsers }) => {
         // console.log(`[Server] Received room settings update for ${roomId}`);

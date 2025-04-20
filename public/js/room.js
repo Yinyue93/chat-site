@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendButton = document.getElementById('send-button');
     const userList = document.getElementById('user-list');
     const soundToggle = document.getElementById('sound-toggle');
+    const typingIndicator = document.getElementById('typing-indicator');
 
     const volumeSlider = document.getElementById('volume-slider');
 
@@ -537,6 +538,10 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('newMessage', (entry) => {
         console.log("[RoomJS] Received 'newMessage':", entry);
         if (entry && entry.username && typeof entry.message === 'string') {
+            // Remove user from typing list if they just sent a message
+            typingUsers.delete(entry.username);
+            updateTypingIndicator();
+            
             // Play notification sound for new messages (except own messages)
             if (entry.username !== username) {
                 playNotificationSound();
@@ -955,6 +960,96 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("[RoomJS] Test sound button listener attached");
     } else {
         console.log("[RoomJS] Test sound button not found (optional)");
+    }
+
+    // --- Typing Indicator Functionality ---
+    // Track typing status
+    let isTyping = false;
+    let typingTimeout = null;
+    // Map to track which users are typing
+    const typingUsers = new Map();
+
+    // Update the typing indicator display
+    function updateTypingIndicator() {
+        if (typingUsers.size === 0) {
+            typingIndicator.classList.remove('visible');
+            typingIndicator.textContent = '';
+            return;
+        }
+
+        // Make the indicator visible
+        typingIndicator.classList.add('visible');
+        
+        // Format the message based on how many users are typing
+        const typingUsernames = Array.from(typingUsers.keys());
+        
+        if (typingUsernames.length === 1) {
+            typingIndicator.textContent = `${escapeHtml(typingUsernames[0])} is typing...`;
+        } else if (typingUsernames.length === 2) {
+            typingIndicator.textContent = `${escapeHtml(typingUsernames[0])} and ${escapeHtml(typingUsernames[1])} are typing...`;
+        } else if (typingUsernames.length === 3) {
+            typingIndicator.textContent = `${escapeHtml(typingUsernames[0])}, ${escapeHtml(typingUsernames[1])}, and ${escapeHtml(typingUsernames[2])} are typing...`;
+        } else {
+            typingIndicator.textContent = `${typingUsernames.length} people are typing...`;
+        }
+    }
+
+    // Listen for typing events
+    socket.on('userTyping', (data) => {
+        console.log("[RoomJS] User typing:", data.username);
+        if (data.username !== username) {
+            typingUsers.set(data.username, Date.now());
+            updateTypingIndicator();
+        }
+    });
+
+    socket.on('userStoppedTyping', (data) => {
+        console.log("[RoomJS] User stopped typing:", data.username);
+        if (data.username !== username) {
+            typingUsers.delete(data.username);
+            updateTypingIndicator();
+        }
+    });
+
+    // Add input event listeners for typing indicators
+    if (messageInput) {
+        let typingDebounceTimer;
+        
+        messageInput.addEventListener('input', () => {
+            if (!isTyping) {
+                // User just started typing
+                isTyping = true;
+                socket.emit('userTyping');
+                console.log("[RoomJS] Emitted 'userTyping'");
+            }
+            
+            // Clear any existing timeout
+            clearTimeout(typingDebounceTimer);
+            
+            // Set a new timeout to consider user "stopped typing" after 2 seconds
+            typingDebounceTimer = setTimeout(() => {
+                isTyping = false;
+                socket.emit('userStoppedTyping');
+                console.log("[RoomJS] Emitted 'userStoppedTyping'");
+            }, 2000);
+        });
+        
+        // Clear typing status when message is sent
+        sendButton.addEventListener('click', () => {
+            if (isTyping) {
+                isTyping = false;
+                clearTimeout(typingDebounceTimer);
+                socket.emit('userStoppedTyping');
+            }
+        });
+        
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && isTyping) {
+                isTyping = false;
+                clearTimeout(typingDebounceTimer);
+                socket.emit('userStoppedTyping');
+            }
+        });
     }
 
     console.log("[RoomJS] Setup complete. Waiting for connection...");
