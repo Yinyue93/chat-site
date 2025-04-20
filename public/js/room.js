@@ -26,7 +26,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendButton = document.getElementById('send-button');
     const userList = document.getElementById('user-list');
     const soundToggle = document.getElementById('sound-toggle');
-    const typingIndicator = document.getElementById('typing-indicator');
+    let typingIndicator = document.getElementById('typing-indicator');
+
+    // Create the typing indicator if it doesn't exist
+    if (chatLog && !typingIndicator) {
+        console.log("[RoomJS] Creating typing indicator element");
+        typingIndicator = document.createElement('div');
+        typingIndicator.id = 'typing-indicator';
+        typingIndicator.className = 'typing-indicator';
+        chatLog.appendChild(typingIndicator);
+    }
 
     const volumeSlider = document.getElementById('volume-slider');
 
@@ -442,7 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper: Add message to chat log ---
     function logMessage(htmlContent) {
-        if (!chatLog || !typingIndicator) return;
+        if (!chatLog) return;
         try {
             const wasScrolledToBottom = chatLog.scrollHeight - chatLog.clientHeight <= chatLog.scrollTop + 5; // Add tolerance
             
@@ -450,8 +459,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const div = document.createElement('div');
             div.innerHTML = htmlContent;
             
-            // Insert before the typing indicator to keep indicator at the bottom
-            chatLog.insertBefore(div, typingIndicator);
+            // Insert before the typing indicator if it exists, otherwise append to chat log
+            if (typingIndicator && typingIndicator.parentNode === chatLog) {
+                chatLog.insertBefore(div, typingIndicator);
+            } else {
+                chatLog.appendChild(div);
+            }
             
             if (wasScrolledToBottom) {
                 chatLog.scrollTop = chatLog.scrollHeight;
@@ -503,11 +516,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('loadLogs', (logs) => {
         console.log("[RoomJS] LOADLOGS event fired.");
-        if (!chatLog || !typingIndicator) return;
+        if (!chatLog) return;
         
-        // Clear existing messages but preserve the typing indicator
-        while (chatLog.firstChild && chatLog.firstChild !== typingIndicator) {
-            chatLog.removeChild(chatLog.firstChild);
+        // Clear the chat log safely
+        chatLog.innerHTML = '';
+        
+        // Re-add the typing indicator if it was previously set up
+        if (typingIndicator) {
+            chatLog.appendChild(typingIndicator);
         }
 
         if (Array.isArray(logs)) {
@@ -1016,17 +1032,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listen for typing events
     socket.on('userTyping', (data) => {
         console.log("[RoomJS] User typing:", data.username);
-        if (data.username !== username) {
+        if (data && data.username && data.username !== username) {
             typingUsers.set(data.username, Date.now());
-            updateTypingIndicator();
+            try {
+                updateTypingIndicator();
+            } catch (err) {
+                console.error("[RoomJS] Error updating typing indicator:", err);
+            }
         }
     });
 
     socket.on('userStoppedTyping', (data) => {
         console.log("[RoomJS] User stopped typing:", data.username);
-        if (data.username !== username) {
+        if (data && data.username && data.username !== username) {
             typingUsers.delete(data.username);
-            updateTypingIndicator();
+            try {
+                updateTypingIndicator();
+            } catch (err) {
+                console.error("[RoomJS] Error updating typing indicator:", err);
+            }
         }
     });
 
