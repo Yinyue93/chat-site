@@ -442,12 +442,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper: Add message to chat log ---
     function logMessage(htmlContent) {
-        if (!chatLog) return;
+        if (!chatLog || !typingIndicator) return;
         try {
             const wasScrolledToBottom = chatLog.scrollHeight - chatLog.clientHeight <= chatLog.scrollTop + 5; // Add tolerance
+            
+            // Create the new message element
             const div = document.createElement('div');
             div.innerHTML = htmlContent;
-            chatLog.appendChild(div);
+            
+            // Insert before the typing indicator to keep indicator at the bottom
+            chatLog.insertBefore(div, typingIndicator);
+            
             if (wasScrolledToBottom) {
                 chatLog.scrollTop = chatLog.scrollHeight;
             }
@@ -498,8 +503,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('loadLogs', (logs) => {
         console.log("[RoomJS] LOADLOGS event fired.");
-        if (!chatLog) return;
-        chatLog.innerHTML = ''; // Clear before adding history
+        if (!chatLog || !typingIndicator) return;
+        
+        // Clear existing messages but preserve the typing indicator
+        while (chatLog.firstChild && chatLog.firstChild !== typingIndicator) {
+            chatLog.removeChild(chatLog.firstChild);
+        }
 
         if (Array.isArray(logs)) {
             logs.forEach(entry => {
@@ -971,11 +980,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Update the typing indicator display
     function updateTypingIndicator() {
+        if (!typingIndicator || !chatLog) return;
+        
         if (typingUsers.size === 0) {
             typingIndicator.classList.remove('visible');
             typingIndicator.textContent = '';
             return;
         }
+
+        // Check if chat was scrolled to bottom before updating
+        const wasScrolledToBottom = chatLog.scrollHeight - chatLog.clientHeight <= chatLog.scrollTop + 5;
 
         // Make the indicator visible
         typingIndicator.classList.add('visible');
@@ -991,6 +1005,11 @@ document.addEventListener('DOMContentLoaded', () => {
             typingIndicator.textContent = `${escapeHtml(typingUsernames[0])}, ${escapeHtml(typingUsernames[1])}, and ${escapeHtml(typingUsernames[2])} are typing...`;
         } else {
             typingIndicator.textContent = `${typingUsernames.length} people are typing...`;
+        }
+        
+        // If chat was at the bottom, scroll to keep the typing indicator visible
+        if (wasScrolledToBottom) {
+            chatLog.scrollTop = chatLog.scrollHeight;
         }
     }
 
