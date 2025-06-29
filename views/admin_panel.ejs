@@ -4,7 +4,79 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - Glitch Chat</title>
-    <link rel="stylesheet" href="/style.css"> <!-- Corrected link to your CSS -->
+    <link rel="stylesheet" href="/css/style.css"> <!-- Link to your CSS -->
+    <style>
+        /* Basic styling for demonstration */
+        body { font-family: sans-serif; padding: 20px; }
+        .admin-container { max-width: 1200px; margin: 20px auto; }
+        h1, h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        .section { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #f8f9fa; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #fff; }
+        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+        th { background-color: #e9ecef; }
+        .search-box { margin-bottom: 10px; padding: 5px; width: 250px; }
+        button, .action-link {
+            padding: 5px 10px; margin: 0 3px; border: none; border-radius: 3px; cursor: pointer;
+            text-decoration: none; display: inline-block; font-size: 0.9em;
+        }
+        .kick-btn { background-color: #ffc107; color: #333; }
+        .kick-btn:hover { background-color: #e0a800; }
+        .ban-btn { background-color: #dc3545; color: white; }
+        .ban-btn:hover { background-color: #c82333; }
+        .delete-btn { background-color: #dc3545; color: white; }
+        .delete-btn:hover { background-color: #c82333; }
+        .hide-btn { background-color: #6c757d; color: white; }
+        .hide-btn:hover { background-color: #5a6268; }
+        .unhide-btn { background-color: #28a745; color: white; }
+        .unhide-btn:hover { background-color: #218838; }
+        .download-link { background-color: #17a2b8; color: white; }
+        .download-link:hover { background-color: #117a8b; }
+        .flag-icon { width: 18px; height: auto; vertical-align: middle; margin-left: 5px; } /* Style for flags */
+        .hidden-row { opacity: 0.6; font-style: italic; } /* Style for hidden rooms */
+        
+        /* Style for header with navigation buttons */
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .admin-header h1 {
+            margin: 0;
+            border: none;
+            padding: 0;
+        }
+        .admin-nav {
+            display: flex;
+            gap: 10px;
+        }
+        
+        /* MODIFIED BUTTON STYLES FOR CONSISTENCY */
+        .back-btn, .logout-btn {
+            background-color: #007bff;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            font-family: sans-serif;
+        }
+        
+        .back-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        .logout-btn {
+            background-color: #6c757d;
+        }
+        
+        .logout-btn:hover {
+            background-color: #5a6268;
+        }
+    </style>
 </head>
 <body>
 

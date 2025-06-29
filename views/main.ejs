@@ -3,12 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat Lobby - Glitch Chat</title>
-    <link rel="stylesheet" href="/style.css"> <!-- Corrected link to your CSS -->
+    <title>Chat Rooms - Glitch Chat</title>
+    <link rel="stylesheet" href="/css/style.css"> <!-- Link to your CSS -->
     <!-- Add Socket.IO client library -->
     <script src="/socket.io/socket.io.js"></script>
     <!-- Add main.js for real-time updates -->
     <script src="/js/main.js"></script>
+    <style>
+        /* Basic styling for demonstration */
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
+        .container { max-width: 800px; margin: 20px auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        .header h1 { margin: 0; }
+        .header .user-info { font-size: 1.1em; }
+        .header .actions form, .header .actions a { display: inline-block; margin-left: 10px;}
+        h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; color: #333; }
+        .room-list ul { list-style: none; padding: 0; }
+        .room-list li { border: 1px solid #eee; padding: 10px 15px; margin-bottom: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; background-color: #fff; transition: background-color 0.2s ease; }
+        .room-list li:hover { background-color: #f8f9fa; }
+        .room-list a { text-decoration: none; color: #007bff; font-weight: bold; }
+        .room-list .details { color: #555; font-size: 0.9em; }
+        .room-list .password-icon { margin-left: 10px; color: #ffc107; } /* Style for password indicator */
+        .room-list .join-button { padding: 5px 10px; background-color: #28a745; color: white; border-radius: 3px; text-decoration: none; font-size: 0.9em; }
+        .room-list .join-button:hover { background-color: #218838; }
+
+        .create-room-form { background-color: #f9f9f9; padding: 20px; border: 1px solid #ccc; border-radius: 5px; margin-top: 30px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input[type="text"], input[type="number"], input[type="password"] { width: 95%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; }
+        button[type="submit"] { padding: 10px 15px; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        .create-room-form button[type="submit"] { background-color: #007bff;}
+        .create-room-form button[type="submit"]:hover { background-color: #0056b3;}
+        .no-rooms { color: #777; }
+        .logout-btn { background-color: #6c757d; }
+        .logout-btn:hover { background-color: #5a6268; }
+        .admin-panel-btn { background-color: #dc3545; color: white; text-decoration: none; padding: 10px 15px; border-radius: 3px; }
+        .admin-panel-btn:hover { background-color: #c82333; }
+        /* Add stats section styling */
+        .stats-section {
+            margin-top: 15px;
+            padding: 8px 15px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #495057;
+            text-align: right;
+        }
+    </style>
 </head>
 <body>
 
