@@ -200,3 +200,363 @@ label {
 h2 {
   color: var(--color-text-header);
 }
+
+/* Styles from room.ejs */
+.chat-container { flex-grow: 1; display: flex; flex-direction: column; padding: 15px; background-color: #fff; margin: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);}
+.sidebar { width: 220px; border-left: 1px solid #ccc; padding: 15px; background-color: #f8f9fa; margin: 10px 10px 10px 0; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1);}
+.chat-container h1, .sidebar h2 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 15px; }
+#chat-log { flex-grow: 1; border: 1px solid #ddd; margin-bottom: 10px; padding: 10px; overflow-y: scroll; background-color: #fff; border-radius: 4px; }
+.message-input-area { display: flex; gap: 10px; margin-top: 10px; }
+#message-input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+#send-button, #upload-button, #exit-button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; }
+#send-button { background-color: #007bff; color: white; }
+#send-button:hover { background-color: #0056b3; }
+#upload-button { background-color: #17a2b8; color: white; }
+#upload-button:hover { background-color: #117a8b; }
+#exit-button { background-color: #dc3545; color: white; margin-top: auto; /* Pushes to bottom */ width: 100%; box-sizing: border-box;}
+#exit-button:hover { background-color: #c82333; }
+#image-input { display: none; } /* Hide the actual file input */
+#user-list { list-style: none; padding: 0; margin-top: 10px; }
+#user-list li { padding: 6px 0; border-bottom: 1px dashed #eee; color: #555;}
+.chat-message { margin-bottom: 10px; line-height: 1.4; }
+.chat-message .username { font-weight: bold; color: #0056b3; margin-right: 5px;}
+/* *** Style for Admin Username *** */
+.chat-message .username.admin-username {
+    color: red;
+    font-weight: bold; /* Keep or adjust as needed */
+}
+/* *** End Style *** */
+.chat-message .timestamp { font-size: 0.8em; color: #888; margin-left: 10px; }
+.chat-message img { max-width: 250px; max-height: 200px; display: block; margin-top: 5px; border: 1px solid #eee; border-radius: 4px; cursor: pointer; }
+.system-message { font-style: italic; color: #6c757d; text-align: center; margin: 8px 0; font-size: 0.9em; }
+
+/* Sound toggle button styles */
+#sound-toggle {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+    padding: 0;
+}
+#sound-toggle:hover {
+    background-color: #5a6268;
+}
+#sound-toggle:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(108, 117, 125, 0.5);
+}
+
+/* Test sound button style */
+#test-sound {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 15px;
+    display: hidden;
+}
+#test-sound:hover {
+    background-color: #218838;
+}
+
+/* Style for clickable links in messages */
+.chat-message a {
+    color: #007bff;
+    text-decoration: underline;
+}
+.chat-message a:hover {
+    color: #0056b3;
+    text-decoration: underline;
+}
+
+/* Settings button styles */
+#settings-button {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+#settings-button:hover {
+    background-color: #5a6268;
+}
+
+/* Updated Room header styles */
+.room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+.room-header h1 {
+    margin: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+    flex: 1; /* Take up left portion */
+}
+.user-count-display {
+    font-size: 1.1em;
+    color: #555;
+    padding: 0 20px;
+    text-align: center;
+    font-weight: bold;
+}
+#settings-button {
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.modal-content {
+    position: relative;
+    background-color: #fefefe;
+    margin: 10% auto;
+    padding: 0;
+    border: 1px solid #888;
+    width: 50%;
+    max-width: 500px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    animation: modalOpen 0.3s ease;
+}
+
+@keyframes modalOpen {
+    from {opacity: 0; transform: translateY(-20px);}
+    to {opacity: 1; transform: translateY(0);}
+}
+
+.modal-header {
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    border-bottom: none;
+}
+
+.modal-body {
+    padding: 15px;
+}
+
+.close-modal {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-modal:hover,
+.close-modal:focus {
+    color: black;
+    text-decoration: none;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.form-buttons {
+    text-align: right;
+    margin-top: 20px;
+}
+
+.form-buttons button {
+    padding: 8px 16px;
+    margin-left: 10px;
+    cursor: pointer;
+}
+
+#save-settings-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+}
+
+#cancel-settings-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+}
+
+.typing-indicator {
+    padding: 5px 10px;
+    color: #666;
+    font-style: italic;
+    font-size: 0.9em;
+    min-height: 20px;
+    display: none; /* Hidden by default */
+    margin: 8px 0;
+    text-align: left;
+}
+
+.typing-indicator.visible {
+    display: block;
+}
+
+/* Styles for login and password prompt forms */
+.form-container { max-width: 400px; margin: 50px auto; padding: 30px; border: 1px solid #ccc; border-radius: 8px; background-color: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+.form-container h1 { text-align: center; margin-bottom: 25px; color: #333; }
+.form-container .form-group { margin-bottom: 20px; }
+.form-container label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+.form-container input[type="text"], .form-container input[type="password"] { width: 95%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+.form-container .btn { flex: 1; padding: 12px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; text-decoration: none; text-align: center; display: block; width: 100%;}
+.form-container .btn:hover { background-color: #0056b3; }
+.form-container .form-actions { display: flex; gap: 10px; }
+.form-container .cancel-btn { background-color: #dc3545; }
+.form-container .cancel-btn:hover { background-color: #c82333; }
+.form-container .error-message, .form-container .error { color: red; margin-bottom: 15px; text-align: center; }
+.form-container p { text-align: center; margin-bottom: 20px; color: #555; }
+.form-container .admin-link { text-align: center; margin-top: 20px; font-size: 0.9em;}
+.form-container .admin-link a { color: #dc3545; text-decoration: none; }
+.form-container .admin-link a:hover { text-decoration: underline; }
+
+.form-container .btn.admin-btn { background-color: #dc3545; }
+.form-container .btn.admin-btn:hover { background-color: #c82333; }
+.form-container .back-link { margin-top: 15px; text-align: center; }
+
+/* Styles from main.ejs */
+.container { max-width: 800px; margin: 20px auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+.header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+.header h1 { margin: 0; }
+.header .user-info { font-size: 1.1em; }
+.header .actions form, .header .actions a { display: inline-block; margin-left: 10px;}
+.container h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; color: #333; }
+.room-list ul { list-style: none; padding: 0; }
+.room-list li { border: 1px solid #eee; padding: 10px 15px; margin-bottom: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; background-color: #fff; transition: background-color 0.2s ease; }
+.room-list li:hover { background-color: #f8f9fa; }
+.room-list a { text-decoration: none; color: #007bff; font-weight: bold; }
+.room-list .details { color: #555; font-size: 0.9em; }
+.room-list .password-icon { margin-left: 10px; color: #ffc107; } /* Style for password indicator */
+.room-list .join-button { padding: 5px 10px; background-color: #28a745; color: white; border-radius: 3px; text-decoration: none; font-size: 0.9em; }
+.room-list .join-button:hover { background-color: #218838; }
+.create-room-form { background-color: #f9f9f9; padding: 20px; border: 1px solid #ccc; border-radius: 5px; margin-top: 30px; }
+.create-room-form .form-group { margin-bottom: 15px; }
+.create-room-form label { display: block; margin-bottom: 5px; }
+.create-room-form input[type="text"], .create-room-form input[type="number"], .create-room-form input[type="password"] { width: 95%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; }
+.create-room-form button[type="submit"] { padding: 10px 15px; color: white; border: none; border-radius: 3px; cursor: pointer; background-color: #007bff;}
+.create-room-form button[type="submit"]:hover { background-color: #0056b3;}
+.no-rooms { color: #777; }
+.logout-btn { background-color: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer; padding: 10px 15px;}
+.logout-btn:hover { background-color: #5a6268; }
+.admin-panel-btn { background-color: #dc3545; color: white; text-decoration: none; padding: 10px 15px; border-radius: 3px; }
+.admin-panel-btn:hover { background-color: #c82333; }
+/* Add stats section styling */
+.stats-section {
+    margin-top: 15px;
+    padding: 8px 15px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #495057;
+    text-align: right;
+}
+
+/* Styles from admin_panel.ejs */
+.admin-container { max-width: 1200px; margin: 20px auto; }
+.admin-container h1, .admin-container h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+.section { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #f8f9fa; }
+.admin-container table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #fff; }
+.admin-container th, .admin-container td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+.admin-container th { background-color: #e9ecef; }
+.search-box { margin-bottom: 10px; padding: 5px; width: 250px; }
+.admin-container button, .admin-container .action-link {
+    padding: 5px 10px; margin: 0 3px; border: none; border-radius: 3px; cursor: pointer;
+    text-decoration: none; display: inline-block; font-size: 0.9em;
+}
+.kick-btn { background-color: #ffc107; color: #333; }
+.kick-btn:hover { background-color: #e0a800; }
+.ban-btn { background-color: #dc3545; color: white; }
+.ban-btn:hover { background-color: #c82333; }
+.delete-btn { background-color: #dc3545; color: white; }
+.delete-btn:hover { background-color: #c82333; }
+.hide-btn { background-color: #6c757d; color: white; }
+.hide-btn:hover { background-color: #5a6268; }
+.unhide-btn { background-color: #28a745; color: white; }
+.unhide-btn:hover { background-color: #218838; }
+.download-link { background-color: #17a2b8; color: white; }
+.download-link:hover { background-color: #117a8b; }
+.flag-icon { width: 18px; height: auto; vertical-align: middle; margin-left: 5px; } /* Style for flags */
+.hidden-row { opacity: 0.6; font-style: italic; } /* Style for hidden rooms */
+
+/* Style for header with navigation buttons */
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.admin-header h1 {
+    margin: 0;
+    border: none;
+    padding: 0;
+}
+.admin-nav {
+    display: flex;
+    gap: 10px;
+}
+
+/* MODIFIED BUTTON STYLES FOR CONSISTENCY */
+.admin-container .back-btn, .admin-container .logout-btn {
+    background-color: #007bff;
+    color: white;
+    padding: 8px 15px;
+    border-radius: 4px;
+    text-decoration: none;
+    display: inline-block;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    font-family: sans-serif;
+}
+
+.admin-container .back-btn:hover {
+    background-color: #0056b3;
+}
+
+.admin-container .logout-btn {
+    background-color: #6c757d;
+}
+
+.admin-container .logout-btn:hover {
+    background-color: #5a6268;
+}
