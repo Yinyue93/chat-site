@@ -9,6 +9,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const geoip = require('geoip-lite');
+require('dotenv').config();
 
 // ================== PERSISTENCE SETUP ==================
 const dbFilePath = '/data/db.json'; // Glitch persistent storage
@@ -158,10 +159,10 @@ function addLog(roomId, logEntry) {
     if (rooms[roomId]) {
         if (!logEntry.timestamp) logEntry.timestamp = Date.now(); // Ensure timestamp
         rooms[roomId].logs.push(logEntry);
-        // Optional: Limit log size to prevent memory issues
-        if (rooms[roomId].logs.length > 150) { // Keep last 150 entries
-            rooms[roomId].logs.shift();
-        }
+        // DISABLED: Limit log size to prevent memory issues
+        // if (rooms[roomId].logs.length > 150) { // Keep last 150 entries
+        //     rooms[roomId].logs.shift();
+        // }
     } else {
         // console.warn(`Attempted to add log to non-existent room: ${roomId}`);
     }
@@ -458,12 +459,50 @@ app.get('/admin/download-log/:roomId', requireAdmin, (req, res) => {
     const roomId = req.params.roomId;
     const room = rooms[roomId];
     if (room) {
-        res.setHeader('Content-Disposition', `attachment; filename="log_${room.name.replace(/[^a-z0-9]/gi, '_')}_${roomId}.json"`);
-        res.setHeader('Content-Type', 'application/json');
-        res.send(JSON.stringify(room.logs, null, 2)); // Pretty-print JSON log
+        // Set headers for a .txt file download
+        res.setHeader('Content-Disposition', `attachment; filename="log_${room.name.replace(/[^a-z0-9]/gi, '_')}_${roomId}.txt"`);
+        res.setHeader('Content-Type', 'text/plain');
+
+        // Format logs into a human-readable string
+        const logString = room.logs.map(entry => {
+            const time = new Date(entry.timestamp).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' });
+            const user = entry.username || 'System';
+            let messageDetails = '';
+
+            switch (entry.type) {
+                case 'message':
+                    messageDetails = `${user}: ${entry.message}`;
+                    break;
+                case 'image':
+                    messageDetails = `${user} uploaded an image: ${entry.url}`;
+                    break;
+                case 'join':
+                    messageDetails = `${user} joined.`;
+                    break;
+                case 'leave':
+                    messageDetails = `${user} left.`;
+                    break;
+                case 'system':
+                    // For system messages, the 'message' field contains the full text
+                    messageDetails = `SYSTEM: ${entry.message}`;
+                    break;
+                default:
+                    // Fallback for any other or future log types
+                    messageDetails = `[${entry.type.toUpperCase()}] ${JSON.stringify(entry)}`;
+                    break;
+            }
+            return `[${time}] ${messageDetails}`;
+        }).join('\n');
+
+        res.send(logString);
     } else {
         res.status(404).send('Room not found');
     }
+});
+
+// Admin Action: Get Banned IPs/Usernames
+app.get('/admin/bans', requireAdmin, (req, res) => {
+    // ... existing code ...
 });
 
 
