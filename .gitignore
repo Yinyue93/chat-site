@@ -1,3 +1,6 @@
 .glitchdotcom.json
 .node-gyp
 node_modules
+.env
+.env.local
+.env.*.local
