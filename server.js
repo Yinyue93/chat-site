@@ -163,8 +163,14 @@ function getAdminData() {
         // Only include users who have successfully joined (have username/session)
         if (socket.username) {
              const ipRaw = socket.request.connection.remoteAddress || socket.handshake.address || 'N/A';
-             // Clean up IPv6 localhost representation
-             const ip = (ipRaw === '::1' || ipRaw === '::ffff:127.0.0.1') ? '127.0.0.1' : ipRaw;
+             // Clean up IPv6 localhost representation and IPv6-mapped IPv4 addresses
+             let ip = ipRaw;
+             if (ipRaw === '::1') {
+                 ip = '127.0.0.1';
+             } else if (ipRaw.startsWith('::ffff:')) {
+                 // Extract IPv4 from IPv6-mapped format
+                 ip = ipRaw.substring(7);
+             }
              const geo = geoip.lookup(ip); // geoip-lite handles private IPs returning null
              allUsers.push({
                  socketId: socket.id,
