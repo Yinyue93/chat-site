@@ -80,6 +80,7 @@ const io = new Server(server);       // Crucial: Attach Socket.IO to the HTTP se
 
 // ================== MIDDLEWARE ==================
 app.set('view engine', 'ejs'); // Set EJS as the template engine
+app.set('trust proxy', true); // Enable reading of X-Forwarded-For headers for real IP addresses
 app.use(express.static(path.join(__dirname, 'public'))); // Serve static files (CSS, client JS)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Serve uploaded images
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded form data
@@ -144,6 +145,36 @@ let rooms = {};
 let userSockets = new Map();
 
 // ================== HELPER FUNCTIONS ==================
+
+// Helper function to extract real IP address from request/socket
+function getRealIpAddress(req) {
+    // For Socket.IO connections, check proxy headers manually
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    const xRealIp = req.headers['x-real-ip'];
+    const cfConnectingIp = req.headers['cf-connecting-ip']; // Cloudflare
+    
+    let ip = req.connection?.remoteAddress || req.handshake?.address || 'N/A';
+    
+    // Use proxy headers if available (first IP in X-Forwarded-For chain is the original client)
+    if (xForwardedFor) {
+        ip = xForwardedFor.split(',')[0].trim();
+    } else if (xRealIp) {
+        ip = xRealIp.trim();
+    } else if (cfConnectingIp) {
+        ip = cfConnectingIp.trim();
+    }
+    
+    // Clean up IPv6 localhost representation and IPv6-mapped IPv4 addresses
+    if (ip === '::1') {
+        ip = '127.0.0.1';
+    } else if (ip.startsWith('::ffff:')) {
+        // Extract IPv4 from IPv6-mapped format
+        ip = ip.substring(7);
+    }
+    
+    return ip;
+}
+
 function getRoomInfoList() {
     return Object.entries(rooms)
         .filter(([roomId, room]) => !room.isHidden) // Don't list hidden rooms
@@ -162,15 +193,7 @@ function getAdminData() {
     io.sockets.sockets.forEach(socket => {
         // Only include users who have successfully joined (have username/session)
         if (socket.username) {
-             const ipRaw = socket.request.connection.remoteAddress || socket.handshake.address || 'N/A';
-             // Clean up IPv6 localhost representation and IPv6-mapped IPv4 addresses
-             let ip = ipRaw;
-             if (ipRaw === '::1') {
-                 ip = '127.0.0.1';
-             } else if (ipRaw.startsWith('::ffff:')) {
-                 // Extract IPv4 from IPv6-mapped format
-                 ip = ipRaw.substring(7);
-             }
+             const ip = getRealIpAddress(socket.request);
              const geo = geoip.lookup(ip); // geoip-lite handles private IPs returning null
              allUsers.push({
                  socketId: socket.id,
@@ -672,7 +695,7 @@ io.on('connection', (socket) => {
         }
 
         // 4. Check for bans
-        const ip = socket.request.connection.remoteAddress || socket.handshake.address;
+        const ip = getRealIpAddress(socket.request);
         if (dbData.bans.includes(socket.username) || dbData.bans.includes(ip)) {
             //  console.log(`Banned user ${socket.username} or IP ${ip} denied joining room ${roomId}`);
              socket.emit('errorMsg', 'You are banned.');
@@ -937,7 +960,7 @@ io.on('connection', (socket) => {
         const targetSocket = io.sockets.sockets.get(socketIdToBan);
 
         if (targetSocket && !targetSocket.isAdmin) { // Prevent banning self or other admins
-            const ip = targetSocket.request.connection.remoteAddress || targetSocket.handshake.address;
+            const ip = getRealIpAddress(targetSocket.request);
             const username = targetSocket.username;
             let changed = false;
             let bannedValue = '';
