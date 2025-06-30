@@ -9,6 +9,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const geoip = require('geoip-lite');
+const bcrypt = require('bcrypt');
 require('dotenv').config();
 
 // ================== PERSISTENCE SETUP ==================
@@ -39,6 +40,38 @@ function writeDb(data) {
 }
 
 let dbData = readDb(); // Load bans on startup
+
+// ================== PASSWORD UTILITIES ==================
+const SALT_ROUNDS = 12;
+
+/**
+ * Hash a password using bcrypt
+ * @param {string} password - Plain text password
+ * @returns {Promise<string>} - Hashed password
+ */
+async function hashPassword(password) {
+    try {
+        return await bcrypt.hash(password, SALT_ROUNDS);
+    } catch (error) {
+        console.error('Error hashing password:', error);
+        throw error;
+    }
+}
+
+/**
+ * Compare a plain text password with a hashed password
+ * @param {string} password - Plain text password
+ * @param {string} hashedPassword - Hashed password
+ * @returns {Promise<boolean>} - True if passwords match
+ */
+async function comparePassword(password, hashedPassword) {
+    try {
+        return await bcrypt.compare(password, hashedPassword);
+    } catch (error) {
+        console.error('Error comparing password:', error);
+        return false;
+    }
+}
 
 // ================== APP/SERVER/SOCKET.IO SETUP ==================
 const app = express();
@@ -261,50 +294,65 @@ app.get('/main', requireLogin, (req, res) => {
 });
 
 // --- Room Creation ---
-app.post('/create-room', requireLogin, (req, res) => {
+app.post('/create-room', requireLogin, async (req, res) => {
     const { roomName, maxUsers, password } = req.body;
     const creator = req.session.username;
 
     if (!roomName || roomName.length < 3 || roomName.length > 30) {
         // TODO: Add flash error message back to /main
-        // console.log(`Room creation failed: Invalid name '${roomName}' by ${creator}`);
+        console.log(`Room creation failed: Invalid name '${roomName}' by ${creator}`);
         return res.redirect('/main');
     }
     const max = parseInt(maxUsers, 10);
     if (isNaN(max) || max < 1 || max > 100) { // Set reasonable limits
          // TODO: Add flash error message back to /main
-        // console.log(`Room creation failed: Invalid max users '${maxUsers}' by ${creator}`);
+        console.log(`Room creation failed: Invalid max users '${maxUsers}' by ${creator}`);
         return res.redirect('/main');
     }
 
-    const roomId = uuidv4(); // Generate unique ID
-    rooms[roomId] = {
-        name: roomName,
-        maxUsers: max,
-        password: password || null, // Store password (Hashing recommended!)
-        users: new Map(), // Map<socketId, {username, isAdmin}>
-        logs: [],
-        isHidden: false,
-        createdBy: creator, // Track who created it
-        createdAt: Date.now()
-    };
-    // console.log(`Room created: '${roomName}' (${roomId}) by ${creator}`);    
-    // ADD THIS CODE: Grant access to the creator if a password was set
-    if (password) {
-        req.session[`room_${roomId}_access`] = true; // Grant access for this session
-        // console.log(`Granted automatic access to room creator ${creator} for room ${roomId}`);
-        // Ensure session is saved before redirect
-        req.session.save(err => {
-            if (err) console.error("Session save error while granting room access:", err);
-            // Add initial log entry
-            addLog(roomId, { type: 'system', message: `Room created by ${creator}`});
+    try {
+        const roomId = uuidv4(); // Generate unique ID
+        
+        // Hash password if provided
+        let hashedPassword = null;
+        if (password && password.trim()) {
+            hashedPassword = await hashPassword(password.trim());
+            console.log(`Password set and hashed for room '${roomName}' by ${creator}`);
+        }
+        
+        rooms[roomId] = {
+            name: roomName,
+            maxUsers: max,
+            password: hashedPassword, // Store hashed password securely
+            users: new Map(), // Map<socketId, {username, isAdmin}>
+            logs: [],
+            isHidden: false,
+            createdBy: creator, // Track who created it
+            createdAt: Date.now()
+        };
+        console.log(`Room created: '${roomName}' (${roomId}) by ${creator}`);    
+        
+        // Grant access to the creator if a password was set
+        if (hashedPassword) {
+            req.session[`room_${roomId}_access`] = true; // Grant access for this session
+            console.log(`Granted automatic access to room creator ${creator} for room ${roomId}`);
+            // Ensure session is saved before redirect
+            req.session.save(err => {
+                if (err) console.error("Session save error while granting room access:", err);
+                // Add initial log entry
+                addLog(roomId, { type: 'system', message: `Room created by ${creator}`});
 
+                res.redirect(`/room/${roomId}`);
+            });
+        } else {
+            // No password, no need to grant special access
+            addLog(roomId, { type: 'system', message: `Room created by ${creator}`});
             res.redirect(`/room/${roomId}`);
-        });
-    } else {
-        // No password, no need to grant special access
-        addLog(roomId, { type: 'system', message: `Room created by ${creator}`});
-        res.redirect(`/room/${roomId}`);
+        }
+    } catch (error) {
+        console.error('Error creating room:', error);
+        // TODO: Add flash error message
+        res.redirect('/main');
     }
 });
 
@@ -336,7 +384,7 @@ app.get('/room/:roomId', requireLogin, (req, res) => {
     });
 });
 
-app.post('/room/:roomId/password', requireLogin, (req, res) => {
+app.post('/room/:roomId/password', requireLogin, async (req, res) => {
      const roomId = req.params.roomId;
      const room = rooms[roomId];
      const { password } = req.body;
@@ -344,17 +392,22 @@ app.post('/room/:roomId/password', requireLogin, (req, res) => {
 
      if (!room) return res.redirect('/main'); // Room disappeared?
 
-     // Check password
-     if (room.password && room.password === password) {
-         session[`room_${roomId}_access`] = true; // Grant access for this session
-         session.save(err => { // Save session before redirect
-             if (err) console.error("Session save error on password grant:", err);
-            //  console.log(`User ${session.username} granted access to room ${roomId}`);
-             res.redirect(`/room/${roomId}`);
-         });
-     } else {
-        //  console.log(`User ${session.username} failed password attempt for room ${roomId}`);
-         res.render('password_prompt', { roomId: roomId, roomName: room.name, error: 'Incorrect password' });
+     try {
+         // Check password using bcrypt
+         if (room.password && await comparePassword(password, room.password)) {
+             session[`room_${roomId}_access`] = true; // Grant access for this session
+             session.save(err => { // Save session before redirect
+                 if (err) console.error("Session save error on password grant:", err);
+                 console.log(`User ${session.username} granted access to room ${roomId}`);
+                 res.redirect(`/room/${roomId}`);
+             });
+         } else {
+             console.log(`User ${session.username} failed password attempt for room ${roomId}`);
+             res.render('password_prompt', { roomId: roomId, roomName: room.name, error: 'Incorrect password' });
+         }
+     } catch (error) {
+         console.error('Error verifying room password:', error);
+         res.render('password_prompt', { roomId: roomId, roomName: room.name, error: 'Password verification failed, please try again.' });
      }
 });
 
@@ -410,31 +463,59 @@ app.post('/upload/:roomId', requireLogin, (req, res) => {
 
 // ================== ADMIN ROUTES ==================
 const ADMIN_USERNAME = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'password'; // Use environment variables!
+const ADMIN_PASSWORD_PLAIN = process.env.ADMIN_PASSWORD || 'password'; // Use environment variables!
+
+// Hash the admin password on startup for secure comparison
+let ADMIN_PASSWORD_HASH = null;
+(async () => {
+    try {
+        ADMIN_PASSWORD_HASH = await hashPassword(ADMIN_PASSWORD_PLAIN);
+        console.log('Admin password hashed successfully on startup');
+    } catch (error) {
+        console.error('Failed to hash admin password on startup:', error);
+        process.exit(1);
+    }
+})();
 
 app.get('/admin-login', (req, res) => {
     if (req.session.isAdmin) return res.redirect('/admin'); // Redirect if already logged in as admin
     res.render('admin_login', { error: null });
 });
 
-app.post('/admin-login', (req, res) => {
+app.post('/admin-login', async (req, res) => {
     const { username, password } = req.body;
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        // Regenerate session ID upon login for security
-        req.session.regenerate(err => {
-            if (err) {
-                //  console.error("Session regeneration error on admin login:", err);
-                 return res.render('admin_login', { error: 'Admin login failed, please try again.' });
-            }
-            // Set admin-specific session data
-            req.session.username = username;
-            req.session.isAdmin = true;
-            // console.log("Admin logged in:", username);
-            res.redirect('/admin');
-        });
-    } else {
-        // console.log(`Failed admin login attempt: User '${username}'`);
-        res.render('admin_login', { error: 'Invalid admin credentials' });
+    
+    // Check if admin password hash is ready
+    if (!ADMIN_PASSWORD_HASH) {
+        console.error('Admin password hash not ready');
+        return res.render('admin_login', { error: 'Server not ready, please try again.' });
+    }
+    
+    try {
+        // Check username and password using bcrypt
+        const isValidUsername = username === ADMIN_USERNAME;
+        const isValidPassword = await comparePassword(password, ADMIN_PASSWORD_HASH);
+        
+        if (isValidUsername && isValidPassword) {
+            // Regenerate session ID upon login for security
+            req.session.regenerate(err => {
+                if (err) {
+                    console.error("Session regeneration error on admin login:", err);
+                    return res.render('admin_login', { error: 'Admin login failed, please try again.' });
+                }
+                // Set admin-specific session data
+                req.session.username = username;
+                req.session.isAdmin = true;
+                console.log("Admin logged in:", username);
+                res.redirect('/admin');
+            });
+        } else {
+            console.log(`Failed admin login attempt: User '${username}'`);
+            res.render('admin_login', { error: 'Invalid admin credentials' });
+        }
+    } catch (error) {
+        console.error('Error during admin login:', error);
+        res.render('admin_login', { error: 'Login failed, please try again.' });
     }
 });
 
