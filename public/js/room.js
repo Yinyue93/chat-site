@@ -1,8 +1,5 @@
 // public/js/room.js (With URL Detection, Notification Sounds, Sound Toggle, and Settings Modal)
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("[RoomJS] DOM Ready.");
-
-
     // --- Notification Sound System Variables ---
     // Declare these at the top of the function scope to prevent lexical declaration errors
     let notificationSound;
@@ -18,7 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (chatLog) chatLog.innerHTML = '<p style="color:red;">ERROR: Connection library missing.</p>';
         return;
     }
-    console.log("[RoomJS] Socket.IO library (io) found.");
 
     // --- Get Elements ---
     const chatLog = document.getElementById('chat-log');
@@ -30,7 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Create the typing indicator if it doesn't exist
     if (chatLog && !typingIndicator) {
-        console.log("[RoomJS] Creating typing indicator element");
         typingIndicator = document.createElement('div');
         typingIndicator.id = 'typing-indicator';
         typingIndicator.className = 'typing-indicator';
@@ -43,7 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     volumeSlider.addEventListener('input', function() {
         chatVolume = this.value
-        console.log(`[RoomJS] Volume set to: ${chatVolume}%`);
     });
 
     volumeSlider.addEventListener('change', function() {
@@ -60,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // ... error handling ...
         return;
     }
-    console.log("[RoomJS] Required elements found.");
 
     // --- Get Room/User Data ---
     const roomId = body?.dataset?.roomId;
@@ -70,7 +63,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // ... error handling ...
         return;
     }
-    console.log(`[RoomJS] Room: ${roomId}, User: ${username}`);
 
     // --- Initialize Notification Sound System ---
     // Check if sound file exists
@@ -108,12 +100,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMaxUsers = 10; // Default value, will be updated when we get room info
 
     // Check for settings elements
-    if (!settingsButton || !settingsModal || !settingsForm || !roomNameInput || !maxUsersInput) {
-        console.error("[RoomJS] One or more settings elements not found");
+        if (!settingsButton || !settingsModal || !settingsForm || !roomNameInput || !maxUsersInput) {
+        console.error("[RoomJS] One or more settings elements not found");
     } else {
-        console.log("[RoomJS] Settings elements found, initializing settings functionality");
-        
-        // Button click handler to open the modal
+        // Button click handler to open the modal
         settingsButton.addEventListener('click', openModal);
         
         // Close button handlers
@@ -152,10 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 maxUsers: newMaxUsers
             });
             
-            logMessage(`<div class="system-message">Updating room settings...</div>`);
+                        logMessage(`<div class="system-message">Updating room settings...</div>`);
         });
-
-        console.log("[RoomJS] Settings event listeners attached");
     }
 
     // Helper function to open modal
@@ -178,7 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let socket;
     try {
         socket = io();
-        console.log("[RoomJS] io() called.");
     } catch (error) {
         console.error("[RoomJS] Error calling io():", error);
         // ... error handling ...
@@ -247,15 +234,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Enhanced Diagnostic Functions for Sound System ---
     function checkSoundFileExists() {
-        console.log("[RoomJS] Checking if sound files exist...");
-
         // Check WAV file
         fetch('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.wav?v=1744073357160', { method: 'HEAD' })
             .then(response => {
                 if (response.ok) {
-                    console.log("[RoomJS] WAV sound file exists and is accessible! Status:", response.status);
-                    console.log("[RoomJS] Content-Type:", response.headers.get('Content-Type'));
-                    console.log("[RoomJS] Content-Length:", response.headers.get('Content-Length'));
+                    // WAV file accessible
                 } else {
                     console.error("[RoomJS] WAV sound file not found! Status:", response.status);
                 }
@@ -268,9 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.wav?v=1744073357160', { method: 'HEAD' })
             .then(response => {
                 if (response.ok) {
-                    console.log("[RoomJS] MP3 sound file exists and is accessible! Status:", response.status);
-                    console.log("[RoomJS] Content-Type:", response.headers.get('Content-Type'));
-                    console.log("[RoomJS] Content-Length:", response.headers.get('Content-Length'));
+                    // MP3 file accessible
                 } else {
                     console.error("[RoomJS] MP3 sound file not found! Status:", response.status);
                 }
@@ -283,7 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function initNotificationSound() {
         // Try to load MP3 first (more widely supported), then fall back to WAV
         tryLoadSound('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.mp3?v=1744073573418').catch(() => {
-            console.log("[RoomJS] MP3 failed, trying WAV format...");
             return tryLoadSound('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.wav?v=1744073357160');
         }).catch(err => {
             console.error("[RoomJS] All sound formats failed to load:", err);
@@ -296,8 +276,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function tryLoadSound(url) {
         return new Promise((resolve, reject) => {
-            console.log(`[RoomJS] Trying to load sound from: ${url}`);
-
             // First check if the file exists
             fetch(url, { method: 'HEAD' })
                 .then(response => {
@@ -306,12 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         return reject(new Error(`Sound file not found: ${response.status}`));
                     }
 
-                    console.log(`[RoomJS] Sound file ${url} exists, creating Audio object`);
                     const audio = new Audio(url);
 
                     // Set up event listeners to monitor loading
                     audio.addEventListener('canplaythrough', () => {
-                        console.log(`[RoomJS] Sound ${url} loaded successfully`);
                         notificationSound = audio;
                         resolve(audio);
                     }, { once: true });
@@ -332,10 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function playNotificationSound() {
-        console.log("[RoomJS] Attempting to play notification sound");
-        console.log("[RoomJS] Notifications enabled:", notificationsEnabled);
-        console.log("[RoomJS] Sound object exists:", !!notificationSound);
-
         if (notificationsEnabled && notificationSound) {
             try {
                 // Check if the audio is actually loaded
@@ -343,19 +315,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.warn("[RoomJS] Sound not fully loaded yet, readyState:", notificationSound.readyState);
                 }
 
-                console.log("[RoomJS] Resetting sound to beginning");
                 notificationSound.currentTime = 0;
                 notificationSound.volume = chatVolume / 100;
 
-                console.log("[RoomJS] Calling play()");
                 const playPromise = notificationSound.play();
 
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
-                        console.log("[RoomJS] Sound playing successfully");
+                        // Sound playing successfully
                     }).catch(err => {
                         console.error("[RoomJS] Error playing sound:", err);
-                        console.log("[RoomJS] This might be due to browser autoplay policy. Try creating a user gesture handler.");
 
                         // Try to set up a one-time user gesture handler to unlock audio
                         setupAudioUnlock();
@@ -364,8 +333,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 console.error("[RoomJS] Error attempting to play sound:", error);
             }
-        } else {
-            console.log("[RoomJS] Not playing sound: enabled=", notificationsEnabled, ", sound object=", !!notificationSound);
         }
     }
 
@@ -374,22 +341,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window._audioUnlockHandlerSet) return; // Only set once
 
         window._audioUnlockHandlerSet = true;
-        console.log("[RoomJS] Setting up audio unlock handler for user gesture");
 
         const unlockAudio = () => {
-            console.log("[RoomJS] User gesture detected, attempting to unlock audio");
-
             if (notificationSound) {
                 // Create and play a silent sound
                 const silentSound = new Audio("data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV");
                 silentSound.play().then(() => {
-                    console.log("[RoomJS] Audio unlocked successfully");
-
                     // Now try to play the actual notification sound
                     if (notificationSound) {
                         notificationSound.currentTime = 0;
                         notificationSound.play().then(() => {
-                            console.log("[RoomJS] Notification sound played after unlock");
+                            // Notification sound played after unlock
                         }).catch(err => {
                             console.error("[RoomJS] Still couldn't play notification sound after unlock:", err);
                         });
@@ -432,8 +394,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.warn("[RoomJS] Could not save notification preference to localStorage:", e);
         }
-
-        console.log(`[RoomJS] Notifications ${notificationsEnabled ? 'enabled' : 'disabled'}`);
     }
 
     // Initialize notification settings from localStorage (if available)
@@ -442,7 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const savedPreference = localStorage.getItem('chatNotificationsEnabled');
             if (savedPreference !== null) {
                 notificationsEnabled = savedPreference === 'true';
-                console.log(`[RoomJS] Loaded notification preference: ${notificationsEnabled}`);
             }
         } catch (e) {
             console.warn("[RoomJS] Could not load notification preference from localStorage:", e);
@@ -476,7 +435,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper: Update User List ---
     function updateUserList(users) {
-        console.log("[RoomJS] Received 'updateUserList':", users);
         if (!userList) return;
         if (Array.isArray(users)) {
             userList.innerHTML = ''; // Clear list
@@ -494,9 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- CORE EVENT LISTENERS ---
 
     socket.on('connect', () => {
-        console.log(`[RoomJS] CONNECT event fired. Socket ID: ${socket.id}`);
         logMessage(`<div class="system-message" style="color:green;">Connected! Joining room...</div>`);
-        console.log("[RoomJS] Emitting 'joinRoom'...");
         socket.emit('joinRoom', { roomId });
     });
 
@@ -515,7 +471,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('loadLogs', (logs) => {
-        console.log("[RoomJS] LOADLOGS event fired.");
         if (!chatLog) return;
         
         // Clear the chat log safely
@@ -561,7 +516,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('newMessage', (entry) => {
-        console.log("[RoomJS] Received 'newMessage':", entry);
         if (entry && entry.username && typeof entry.message === 'string') {
             // Remove user from typing list if they just sent a message
             typingUsers.delete(entry.username);
@@ -584,7 +538,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('newImage', (entry) => {
-        console.log("[RoomJS] Received 'newImage':", entry);
         if (entry && entry.username && entry.url) {
             // Play notification sound for new images (except own uploads)
             if (entry.username !== username) {
@@ -603,7 +556,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add back user list listener
     socket.on('updateUserList', (users) => {
-        console.log("[RoomJS] Received 'updateUserList':", users);
         if (!userList) return;
         if (Array.isArray(users)) {
             userList.innerHTML = ''; // Clear list
@@ -624,7 +576,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('userJoined', (entry) => {
-        console.log("[RoomJS] Received 'userJoined':", entry);
         if(entry && entry.username){
             const time = new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const adminSuffix = entry.isAdmin ? ' (Admin)' : '';
@@ -638,7 +589,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('userLeft', (entry) => {
-        console.log("[RoomJS] Received 'userLeft':", entry);
         if(entry && entry.username){
             const time = new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const adminSuffix = entry.isAdmin ? ' (Admin)' : '';
@@ -664,13 +614,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add this with your other socket event handlers
     socket.on('roomInfo', (roomData) => {
-        console.log("[RoomJS] Received room info:", roomData);
         if (roomData && roomData.name && roomData.maxUsers) {
             // Update the cached values
             currentRoomName = roomData.name;
             currentMaxUsers = roomData.maxUsers;
-            
-            console.log(`[RoomJS] Updated room settings cache: Name=${currentRoomName}, MaxUsers=${currentMaxUsers}`);
             
             // Update page title
             document.title = `Chat: ${escapeHtml(currentRoomName)}`;
@@ -700,8 +647,6 @@ document.addEventListener('DOMContentLoaded', () => {
             currentRoomName = result.roomName;
             currentMaxUsers = result.maxUsers;
             
-            console.log(`[RoomJS] Settings updated: Name=${currentRoomName}, MaxUsers=${currentMaxUsers}`);
-            
             // Update page title
             document.title = `Chat: ${escapeHtml(currentRoomName)}`;
             
@@ -724,17 +669,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    console.log("[RoomJS] Core event listeners attached.");
-
     // --- Client Actions ---
     function sendMessage() {
         if (!socket || socket.disconnected) { /* ... */ return; }
         const message = messageInput.value.trim();
-        console.log(`[RoomJS] Send clicked. Message: "${message}"`);
         if (message && !messageInput.disabled) {
             if (message.length > 500) { /* ... */ return; }
             socket.emit('sendMessage', { message });
-            console.log("[RoomJS] 'sendMessage' emitted.");
             messageInput.value = '';
         }
         messageInput.focus();
@@ -746,7 +687,6 @@ document.addEventListener('DOMContentLoaded', () => {
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
         });
-        console.log("[RoomJS] Send message listeners attached.");
     } else { /* ... error log ... */ }
 
     // --- Image Upload (Now Enabled) ---
@@ -771,17 +711,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Replace the upload button click handler with this enhanced diagnostic version
         // Fixed upload button click handler without syntax errors
         uploadButton.addEventListener('click', () => {
-            console.log("[RoomJS] Upload button clicked");
-
             // If no file is selected, trigger the file input dialog
             if (!imageInput.files || !imageInput.files[0]) {
-                console.log("[RoomJS] No file selected, opening file dialog");
                 imageInput.click();
                 return;
             }
 
             const file = imageInput.files[0];
-            console.log("[RoomJS] File selected:", file.name, "Type:", file.type, "Size:", file.size, "bytes");
 
             // Check file type
             if (!file.type.match('image.*')) {
@@ -803,20 +739,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Show uploading message
             logMessage(`<div class="system-message">Uploading image...</div>`);
-            console.log("[RoomJS] Creating FormData for direct HTTP upload");
 
             // Create FormData object for direct HTTP upload
             const formData = new FormData();
             formData.append('image', file);
 
             // Use direct HTTP upload instead of Socket.IO
-            console.log("[RoomJS] Starting HTTP upload to /upload/" + roomId);
             fetch('/upload/' + roomId, {
                 method: 'POST',
                 body: formData
             })
             .then(response => {
-                console.log("[RoomJS] Upload response status:", response.status);
                 // Check if response is ok (status in the range 200-299)
                 if (!response.ok) {
                     // Attempt to parse error message from JSON response, otherwise use status text
@@ -831,10 +764,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return response.json(); // Parse JSON body for successful responses
             })
             .then(data => {
-                console.log("[RoomJS] Upload response data:", data);
                 // Server should send back { success: true, imageUrl: '...' } or { success: false, message: '...' }
                 if (data.success) {
-                    console.log("[RoomJS] Upload successful:", data.imageUrl);
                     // Success! The server will emit a socket event to all clients
                     logMessage(`<div class="system-message" style="color:green;">Image uploaded successfully!</div>`);
                 } else {
@@ -853,29 +784,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 imageInput.value = '';
             });
         }); // End of upload button event listener
-
-        console.log("[RoomJS] Image upload listeners attached."); // Moved log message here
     } else {
         console.warn("[RoomJS] Image upload button or input not found."); // Added warning if elements are missing
     }
 
         // --- Clipboard Image Paste ---
-    console.log("[RoomJS] Setting up clipboard image paste functionality...");
     
     // Function to handle clipboard paste events
     function handlePaste(e) {
-        console.log("[RoomJS] Paste event detected");
-        
         // Check if we're pasting into the message input field
         const activeElement = document.activeElement;
         if (activeElement !== messageInput) {
-            console.log("[RoomJS] Paste not in message input, ignoring");
             return; // Only process pastes in the message input
         }
         
         // Check for clipboard data
         if (!e.clipboardData || !e.clipboardData.items) {
-            console.log("[RoomJS] No clipboard data found");
             return;
         }
         
@@ -885,7 +809,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf('image') !== -1) {
-                console.log("[RoomJS] Found image in clipboard: ", items[i].type);
                 imageItem = items[i];
                 break;
             }
@@ -893,7 +816,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // If no image is found, let the default paste behavior continue
         if (!imageItem) {
-            console.log("[RoomJS] No image found in clipboard, continuing with normal paste");
             return;
         }
         
@@ -903,7 +825,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get the image as a file
         const blob = imageItem.getAsFile();
         if (!blob) {
-            console.log("[RoomJS] Failed to get image as file");
             return;
         }
         
@@ -913,7 +834,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Create a File object from the blob
         const file = new File([blob], filename, { type: blob.type });
-        console.log("[RoomJS] Created file from pasted image:", file.name, "Type:", file.type, "Size:", file.size, "bytes");
         
         // Check file size (limit to 2MB like in the upload handler)
         if (file.size > 2 * 1024 * 1024) {
@@ -930,13 +850,11 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('image', file);
         
         // Use the existing upload mechanism
-        console.log("[RoomJS] Uploading pasted image to /upload/" + roomId);
         fetch('/upload/' + roomId, {
             method: 'POST',
             body: formData
         })
         .then(response => {
-            console.log("[RoomJS] Paste upload response status:", response.status);
             // Check if response is ok (status in the range 200-299)
             if (!response.ok) {
                 // Attempt to parse error message from JSON response, otherwise use status text
@@ -951,10 +869,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return response.json(); // Parse JSON body for successful responses
         })
         .then(data => {
-            console.log("[RoomJS] Paste upload response data:", data);
             // Server should send back { success: true, imageUrl: '...' } or { success: false, message: '...' }
             if (data.success) {
-                console.log("[RoomJS] Paste upload successful:", data.imageUrl);
                 // Success! The server will emit a socket event to all clients
                 logMessage(`<div class="system-message" style="color:green;">Pasted image uploaded successfully!</div>`);
             } else {
@@ -972,19 +888,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Add the paste event listener to the document
     document.addEventListener('paste', handlePaste);
-    
-    console.log("[RoomJS] Clipboard image paste functionality set up.");    
 
     // --- Test Sound Button ---
     const testSoundBtn = document.getElementById('test-sound');
     if (testSoundBtn) {
         testSoundBtn.addEventListener('click', () => {
-            console.log("[RoomJS] Test sound button clicked");
             playNotificationSound();
         });
-        console.log("[RoomJS] Test sound button listener attached");
-    } else {
-        console.log("[RoomJS] Test sound button not found (optional)");
     }
 
     // --- Typing Indicator Functionality ---
@@ -1031,7 +941,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Listen for typing events
     socket.on('userTyping', (data) => {
-        console.log("[RoomJS] User typing:", data.username);
         if (data && data.username && data.username !== username) {
             typingUsers.set(data.username, Date.now());
             try {
@@ -1043,7 +952,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('userStoppedTyping', (data) => {
-        console.log("[RoomJS] User stopped typing:", data.username);
         if (data && data.username && data.username !== username) {
             typingUsers.delete(data.username);
             try {
@@ -1063,7 +971,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 // User just started typing
                 isTyping = true;
                 socket.emit('userTyping');
-                console.log("[RoomJS] Emitted 'userTyping'");
             }
             
             // Clear any existing timeout
@@ -1073,7 +980,6 @@ document.addEventListener('DOMContentLoaded', () => {
             typingDebounceTimer = setTimeout(() => {
                 isTyping = false;
                 socket.emit('userStoppedTyping');
-                console.log("[RoomJS] Emitted 'userStoppedTyping'");
             }, 2000);
         });
         
@@ -1094,6 +1000,4 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    console.log("[RoomJS] Setup complete. Waiting for connection...");
 }); // End DOMContentLoaded

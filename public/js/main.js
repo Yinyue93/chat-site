@@ -1,8 +1,6 @@
 // public/js/main.js - Updates to improve user count handling
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("[MainJS] DOM Ready.");
-
     // --- Check for Socket.IO library ---
     if (typeof io === 'undefined') {
         console.error("[MainJS] FATAL: Socket.IO client library (io) not loaded!");
@@ -10,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (roomList) roomList.innerHTML = '<p style="color:red;">ERROR: Connection library missing.</p>';
         return;
     }
-    console.log("[MainJS] Socket.IO library (io) found.");
 
     // --- Get Elements ---
     const roomList = document.getElementById('room-list');
@@ -22,13 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("[MainJS] ERROR: Room list element is missing!");
         return;
     }
-    console.log("[MainJS] Required elements found.");
 
     // --- Attempt Connection ---
     let socket;
     try {
         socket = io();
-        console.log("[MainJS] io() called.");
     } catch (error) {
         console.error("[MainJS] Error calling io():", error);
         return;
@@ -52,8 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("[MainJS] Invalid room list data:", rooms);
             return;
         }
-        
-        console.log("[MainJS] Updating room list with", rooms.length, "rooms");
         
         // Update the room count if element exists
         if (roomCount) roomCount.textContent = rooms.length;
@@ -118,8 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateSingleRoom(updatedRoom) {
         if (!roomList) return;
         
-        console.log("[MainJS] Updating single room:", updatedRoom.id);
-        
         // Find the room in the list
         const roomElements = roomList.querySelectorAll('li');
         let roomFound = false;
@@ -168,12 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Socket Event Listeners ---
     socket.on('connect', () => {
-        console.log(`[MainJS] Connected. Socket ID: ${socket.id}`);
         socket.emit('joinMainLobby');
     });
 
     socket.on('roomListUpdate', (data) => {
-        console.log('[MainJS] Received roomListUpdate event');
         updateRoomList(data.rooms);
         if (userCount && typeof data.connectedUsers === 'number') {
             updateUserCountWithAnimation(data.connectedUsers);
@@ -182,19 +171,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Enhanced userCountUpdate handler with animation
     socket.on('userCountUpdate', (count) => {
-        console.log('[MainJS] Received userCountUpdate event:', count);
         updateUserCountWithAnimation(count);
     });
 
     // New event listener for single room updates
     socket.on('roomSettingsChanged', (updatedRoom) => {
-        console.log('[MainJS] Received roomSettingsChanged event', updatedRoom);
         updateSingleRoom(updatedRoom);
     });
 
     socket.on('roomDeleted', (roomId) => {
-        console.log('[MainJS] Received roomDeleted event for room:', roomId);
-
         // Find and remove the room from the list or refresh the entire list
         const roomElements = roomList.querySelectorAll('li');
         let roomRemoved = false;
@@ -207,7 +192,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (liRoomId === roomId) {
                 li.remove();
                 roomRemoved = true;
-                console.log('[MainJS] Removed deleted room from list:', roomId);
                 
                 // Update the room count if element exists
                 if (roomCount && roomCount.textContent) {
@@ -249,6 +233,4 @@ document.addEventListener('DOMContentLoaded', () => {
             userCount.textContent = '!';
         }
     });
-
-    console.log("[MainJS] Setup complete.");
 });

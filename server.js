@@ -262,7 +262,6 @@ app.get('/main', requireLogin, (req, res) => {
 
 // --- Room Creation ---
 app.post('/create-room', requireLogin, (req, res) => {
-    console.log("creating room111111111111111111")
     const { roomName, maxUsers, password } = req.body;
     const creator = req.session.username;
 
@@ -541,7 +540,6 @@ io.on('connection', (socket) => {
         // Auto-join main_lobby on connection unless specifically in a room
         if (!socket.currentRoom) {
             socket.join('main_lobby');
-            console.log(`User ${socket.username} auto-joined main lobby`);
             
             // Notify everyone about updated user count immediately
             const connectedUsers = io.sockets.sockets.size;
@@ -553,7 +551,6 @@ io.on('connection', (socket) => {
     socket.on('joinMainLobby', () => {
          // Make sure we're tracking 'main_lobby' joins
          socket.join('main_lobby');
-         console.log(`User ${socket.username} joined main lobby`);
 
          // Send current room list
          socket.emit('roomListUpdate', {
@@ -666,8 +663,6 @@ io.on('connection', (socket) => {
             rooms: getRoomInfoList(),
             connectedUsers: io.sockets.sockets.size // Total connected users
         });
-
-        console.log(getRoomInfoList());
     });
 
     // --- Handle Incoming Messages ---
@@ -827,7 +822,6 @@ io.on('connection', (socket) => {
     socket.on('adminJoin', () => { // For when admin panel page loads/connects
          if (socket.isAdmin) {
              socket.join('admin_room'); // Join a dedicated room for admin updates
-             console.log(`Admin ${socket.username} joined the admin_room`);
              socket.emit('adminUpdate', getAdminData()); // Send initial data
          }
     });
@@ -936,7 +930,6 @@ io.on('connection', (socket) => {
         if (roomToToggle) {
             roomToToggle.isHidden = !roomToToggle.isHidden;
             const status = roomToToggle.isHidden ? 'hidden' : 'visible';
-            console.log(`Admin ${socket.username} toggled room ${roomToToggle.name} to ${status}`);
     
             // Notify main lobby with a FULL room list update
             if (io.sockets.adapter.rooms.has('main_lobby')) {
@@ -946,7 +939,6 @@ io.on('connection', (socket) => {
                     rooms: getRoomInfoList(),  // This already filters out hidden rooms
                     connectedUsers: connectedUsers
                 });
-                console.log(`Sent full room list update to main lobby after visibility change`);
             }
     
             // Update admin panel
