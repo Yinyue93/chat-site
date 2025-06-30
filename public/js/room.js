@@ -101,20 +101,20 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("[RoomJS] One or more settings elements not found");
     } else {
         // Button click handler to open the modal
-        settingsButton.addEventListener('click', openModal);
-        
-        // Close button handlers
-        closeModalBtn.addEventListener('click', closeModal);
-        cancelSettingsBtn.addEventListener('click', closeModal);
-        
-        // Close when clicking outside the modal
-        window.addEventListener('click', (event) => {
-            if (event.target === settingsModal) {
-                closeModal();
-            }
-        });
-        
-        // Form submission
+        settingsButton.addEventListener('click', openModal);
+    
+        // Close button handlers
+        closeModalBtn.addEventListener('click', closeModal);
+        cancelSettingsBtn.addEventListener('click', closeModal);
+    
+        // Close when clicking outside the modal
+        window.addEventListener('click', (event) => {
+            if (event.target === settingsModal) {
+                closeModal();
+            }
+        });
+    
+        // Form submission
         settingsForm.addEventListener('submit', (event) => {
             event.preventDefault();
             
