@@ -65,10 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Initialize Notification Sound System ---
-    // Check if sound file exists
-    checkSoundFileExists();
-
-    // Initialize sound with diagnostics
+    // Initialize sound
     initNotificationSound();
     initNotificationPreference();
 
@@ -232,100 +229,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return linkedText;
     }
 
-    // --- Enhanced Diagnostic Functions for Sound System ---
-    function checkSoundFileExists() {
-        // Check WAV file
-        fetch('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.wav?v=1744073357160', { method: 'HEAD' })
-            .then(response => {
-                if (response.ok) {
-                    // WAV file accessible
-                } else {
-                    console.error("[RoomJS] WAV sound file not found! Status:", response.status);
-                }
-            })
-            .catch(error => {
-                console.error("[RoomJS] Error checking WAV sound file:", error);
-            });
-
-        // Check MP3 file
-        fetch('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.wav?v=1744073357160', { method: 'HEAD' })
-            .then(response => {
-                if (response.ok) {
-                    // MP3 file accessible
-                } else {
-                    console.error("[RoomJS] MP3 sound file not found! Status:", response.status);
-                }
-            })
-            .catch(error => {
-                console.error("[RoomJS] Error checking MP3 sound file:", error);
-            });
-    }
-
     function initNotificationSound() {
-        // Try to load MP3 first (more widely supported), then fall back to WAV
-        tryLoadSound('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.mp3?v=1744073573418').catch(() => {
-            return tryLoadSound('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.wav?v=1744073357160');
-        }).catch(err => {
-            console.error("[RoomJS] All sound formats failed to load:", err);
-            // Create a silent dummy sound as a last resort
-            notificationSound = new Audio("data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV");
-            // Setup audio unlock for future attempts
-            setupAudioUnlock();
-        });
-    }
-
-    function tryLoadSound(url) {
-        return new Promise((resolve, reject) => {
-            // First check if the file exists
-            fetch(url, { method: 'HEAD' })
-                .then(response => {
-                    if (!response.ok) {
-                        console.error(`[RoomJS] Sound file ${url} not found (${response.status})`);
-                        return reject(new Error(`Sound file not found: ${response.status}`));
-                    }
-
-                    const audio = new Audio(url);
-
-                    // Set up event listeners to monitor loading
-                    audio.addEventListener('canplaythrough', () => {
-                        notificationSound = audio;
-                        resolve(audio);
-                    }, { once: true });
-
-                    audio.addEventListener('error', (e) => {
-                        console.error(`[RoomJS] Error loading sound ${url}:`, e);
-                        reject(e);
-                    }, { once: true });
-
-                    // Start loading the sound
-                    audio.load();
-                })
-                .catch(err => {
-                    console.error(`[RoomJS] Network error checking sound file ${url}:`, err);
-                    reject(err);
-                });
-        });
+        // Load MP3 notification sound
+        notificationSound = new Audio('https://cdn.glitch.global/5aba5ef8-de70-4d36-ac73-78691eb1ea7a/notification.mp3?v=1744073573418');
+        
+        // Setup audio unlock for browsers that require user interaction
+        setupAudioUnlock();
     }
 
     function playNotificationSound() {
         if (notificationsEnabled && notificationSound) {
             try {
-                // Check if the audio is actually loaded
-                if (notificationSound.readyState < 2) { // HAVE_CURRENT_DATA
-                    console.warn("[RoomJS] Sound not fully loaded yet, readyState:", notificationSound.readyState);
-                }
-
                 notificationSound.currentTime = 0;
                 notificationSound.volume = chatVolume / 100;
 
                 const playPromise = notificationSound.play();
 
                 if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        // Sound playing successfully
-                    }).catch(err => {
-                        console.error("[RoomJS] Error playing sound:", err);
-
+                    playPromise.catch(err => {
                         // Try to set up a one-time user gesture handler to unlock audio
                         setupAudioUnlock();
                     });
@@ -344,20 +265,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const unlockAudio = () => {
             if (notificationSound) {
-                // Create and play a silent sound
+                // Create and play a silent sound to unlock audio context
                 const silentSound = new Audio("data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV");
-                silentSound.play().then(() => {
-                    // Now try to play the actual notification sound
-                    if (notificationSound) {
-                        notificationSound.currentTime = 0;
-                        notificationSound.play().then(() => {
-                            // Notification sound played after unlock
-                        }).catch(err => {
-                            console.error("[RoomJS] Still couldn't play notification sound after unlock:", err);
-                        });
-                    }
-                }).catch(err => {
-                    console.error("[RoomJS] Couldn't unlock audio:", err);
+                silentSound.play().catch(() => {
+                    // Ignore error - just trying to unlock
                 });
             }
 
