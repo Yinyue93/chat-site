@@ -572,9 +572,14 @@ app.get('/admin/download-log/:roomId', requireAdmin, (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="log_${room.name.replace(/[^a-z0-9]/gi, '_')}_${roomId}.txt"`);
         res.setHeader('Content-Type', 'text/plain');
 
+        // Get timezone offset from query parameter (in minutes)
+        const timezoneOffset = parseInt(req.query.tz) || 0;
+
         // Format logs into a human-readable string
         const logString = room.logs.map(entry => {
-            const time = new Date(entry.timestamp).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' });
+            // Apply timezone offset to get local time
+            const localTime = new Date(entry.timestamp - (timezoneOffset * 60000));
+            const time = localTime.toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' });
             const user = entry.username || 'System';
             let messageDetails = '';
 

@@ -84,6 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
          if (!roomsTbody) return;
          roomsTbody.innerHTML = '';
          if (!Array.isArray(rooms)) { console.error("renderRooms received non-array:", rooms); return; }
+        
+        // Get user's timezone offset in minutes
+        const timezoneOffset = new Date().getTimezoneOffset();
+        
         rooms.forEach(room => {
             const row = roomsTbody.insertRow();
             row.dataset.roomname = room.name.toLowerCase();
@@ -102,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         `<button class="hide-btn" data-room-id="${room.id}">Hide</button>`
                     }
                     <button class="delete-btn" data-room-id="${room.id}">Delete</button>
-                    <a href="/admin/download-log/${room.id}" target="_blank" class="action-link download-link">Download Log</a>
+                    <a href="/admin/download-log/${room.id}?tz=${timezoneOffset}" target="_blank" class="action-link download-link">Download Log</a>
                 </td>
             `;
         });

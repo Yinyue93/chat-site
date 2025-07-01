@@ -194,5 +194,20 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/admin.js"></script> <!-- Your client-side admin logic -->
+    
+    <script>
+        // Add timezone offset to all download links on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const timezoneOffset = new Date().getTimezoneOffset();
+            const downloadLinks = document.querySelectorAll('.download-link');
+            
+            downloadLinks.forEach(link => {
+                const currentHref = link.getAttribute('href');
+                if (currentHref && !currentHref.includes('?tz=')) {
+                    link.setAttribute('href', currentHref + '?tz=' + timezoneOffset);
+                }
+            });
+        });
+    </script>
 </body>
 </html>
