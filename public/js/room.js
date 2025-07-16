@@ -434,13 +434,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (entry.type === 'image' && entry.url) {
                     const safeUrlForJs = escapeJsStringInHtml(entry.url);
                     logMessage(`<div class="chat-message"><span class="username ${isAdminClass}">${safeUser}</span> uploaded an image <span class="timestamp">${time}</span>: <br> <img src="${escapeHtml(entry.url)}" alt="Image from ${safeUser}" style="max-width:200px; max-height:150px; cursor:pointer;" onclick="window.open('${safeUrlForJs}', '_blank')"></div>`);
-                } else if (entry.type === 'join' || entry.type === 'leave' || entry.type === 'system') {
+                } else if (entry.type === 'join' || entry.type === 'leave' || entry.type === 'system' || entry.type === 'ban' || entry.type === 'kick') {
                     const adminSuffix = entry.isAdmin ? ' (Admin)' : '';
                     let sysMsg = '';
                     if (entry.type === 'join') sysMsg = `${safeUser}${adminSuffix} joined.`;
                     else if (entry.type === 'leave') sysMsg = `${safeUser}${adminSuffix} left.`;
+                    else if (entry.type === 'ban') sysMsg = `${safeUser} was banned by admin`;
+                    else if (entry.type === 'kick') sysMsg = `${safeUser} was kicked by admin`;
                     else sysMsg = escapeHtml(entry.message || '[System Event]');
-                    logMessage(`<div class="system-message">${sysMsg} (${time})</div>`);
+                    
+                    // Use different styling for ban and kick messages
+                    if (entry.type === 'ban') {
+                        logMessage(`<div class="ban-message">${sysMsg} (${time})</div>`);
+                    } else if (entry.type === 'kick') {
+                        logMessage(`<div class="kick-message">${sysMsg} (${time})</div>`);
+                    } else {
+                        logMessage(`<div class="system-message">${sysMsg} (${time})</div>`);
+                    }
                 }
             });
             chatLog.scrollTop = chatLog.scrollHeight; // Scroll after adding history
@@ -459,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('newMessage', (entry) => {
-        if (entry && entry.username && typeof entry.message === 'string') {
+        if (entry && entry.username && entry.timestamp) {
             // Remove user from typing list if they just sent a message
             typingUsers.delete(entry.username);
             updateTypingIndicator();
@@ -472,9 +482,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const time = new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const isAdminClass = entry.isAdmin ? 'admin-username' : '';
             const safeUser = escapeHtml(entry.username);
-            // Process the message to detect and convert URLs to links
-            const processedMessage = linkifyText(escapeHtml(entry.message));
-            logMessage(`<div class="chat-message"><span class="username ${isAdminClass}">${safeUser}:</span> ${processedMessage} <span class="timestamp">${time}</span></div>`);
+            
+            // Handle different message types
+            if (entry.type === 'message') {
+                // Regular chat message
+                const processedMessage = linkifyText(escapeHtml(entry.message));
+                logMessage(`<div class="chat-message"><span class="username ${isAdminClass}">${safeUser}:</span> ${processedMessage} <span class="timestamp">${time}</span></div>`);
+            } else if (entry.type === 'join' || entry.type === 'leave' || entry.type === 'system' || entry.type === 'ban' || entry.type === 'kick') {
+                // System messages (join, leave, ban, kick, etc.)
+                const adminSuffix = entry.isAdmin ? ' (Admin)' : '';
+                let sysMsg = '';
+                if (entry.type === 'join') sysMsg = `${safeUser}${adminSuffix} joined.`;
+                else if (entry.type === 'leave') sysMsg = `${safeUser}${adminSuffix} left.`;
+                else if (entry.type === 'ban') sysMsg = `${safeUser} was banned by admin`;
+                else if (entry.type === 'kick') sysMsg = `${safeUser} was kicked by admin`;
+                else sysMsg = escapeHtml(entry.message || '[System Event]');
+                
+                // Use different styling for ban and kick messages
+                if (entry.type === 'ban') {
+                    logMessage(`<div class="ban-message">${sysMsg} (${time})</div>`);
+                } else if (entry.type === 'kick') {
+                    logMessage(`<div class="kick-message">${sysMsg} (${time})</div>`);
+                } else {
+                    logMessage(`<div class="system-message">${sysMsg} (${time})</div>`);
+                }
+            }
         } else {
             console.warn("[RoomJS] Received malformed 'newMessage':", entry);
         }

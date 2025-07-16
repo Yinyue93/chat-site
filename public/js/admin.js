@@ -201,15 +201,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                // Show a dialog to choose ban options
-                const banUsername = confirm(`Ban username "${username}"?\nClick OK for Yes, Cancel to skip username ban.`);
-                const banIp = confirm(`Ban IP address "${ip}"?\nClick OK for Yes, Cancel to skip IP ban.`);
+                // Default to IP banning with option to also ban username
+                const banIp = confirm(`Ban IP address "${ip}"?\nClick OK to ban IP address, Cancel to abort.`);
                 
-                if (banUsername || banIp) {
+                if (banIp) {
+                    // Ask if they also want to ban the username
+                    const alsoUsername = confirm(`Also ban username "${username}"?\nClick OK to also ban username, Cancel to ban IP only.`);
+                    
                     socket.emit('adminBanUser', { 
                         socketIdToBan: socketId,
-                        banUsername: banUsername,
-                        banIp: banIp
+                        banUsername: alsoUsername,
+                        banIp: true  // Always true since we confirmed IP ban first
                     });
                 }
             }

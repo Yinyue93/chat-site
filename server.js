@@ -1340,24 +1340,43 @@ io.on('connection', (socket) => {
          }
     });
 
-    socket.on('adminKickUser', ({ socketIdToKick }) => {
+    socket.on('adminKickUser', async ({ socketIdToKick }) => {
         if (!socket.isAdmin) return socket.emit('errorMsg', 'Permission denied.');
         const targetSocket = io.sockets.sockets.get(socketIdToKick);
         if (targetSocket && !targetSocket.isAdmin) { // Prevent kicking self or other admins
-            console.log(`Admin ${socket.username} kicking user ${targetSocket.username} (${socketIdToKick})`);
+            const username = targetSocket.username;
+            console.log(`Admin ${socket.username} kicking user ${username} (${socketIdToKick})`);
+            
+            // Check if the kicked user is in a room and notify other users
+            if (targetSocket.currentRoom && rooms[targetSocket.currentRoom]) {
+                const roomId = targetSocket.currentRoom;
+                const kickMessage = `${username} was kicked by admin`;
+                
+                // Add kick message to room log
+                const kickLogEntry = {
+                    type: 'kick',
+                    username: username,
+                    message: kickMessage,
+                    timestamp: Date.now()
+                };
+                
+                await addLog(roomId, kickLogEntry);
+                
+                // Send kick message to all users in the room
+                io.to(roomId).emit('newMessage', kickLogEntry);
+            }
+            
             targetSocket.emit('kicked', 'Kicked by Admin');
             targetSocket.disconnect(true); // Force disconnect
-             // Update admin panel shortly after disconnect
-             setTimeout(async () => {
-                  if (io.sockets.adapter.rooms.has('admin_room')) {
-                     try {
-                         const adminData = await getAdminData();
-                         io.to('admin_room').emit('adminUpdate', adminData);
-                     } catch (error) {
-                         console.error('Error getting admin data for kick update:', error);
-                     }
-                  }
-             }, 500);
+             // Update admin panel immediately
+             if (io.sockets.adapter.rooms.has('admin_room')) {
+                 try {
+                     const adminData = await getAdminData();
+                     io.to('admin_room').emit('adminUpdate', adminData);
+                 } catch (error) {
+                     console.error('Error getting admin data for kick update:', error);
+                 }
+             }
         } else {
             console.warn(`Admin ${socket.username} failed kick: Target ${socketIdToKick} not found or is admin.`);
             socket.emit('errorMsg', 'Cannot kick user (not found or is admin).');
@@ -1398,17 +1417,34 @@ io.on('connection', (socket) => {
                     changed = true;
                 }
 
-                if (changed) {
-                   targetSocket.emit('banned', 'You were banned');
-                   targetSocket.disconnect(true);
-                    // Update admin panel shortly after disconnect
-                     setTimeout(async () => {
-                        if (io.sockets.adapter.rooms.has('admin_room')) {
-                            const adminData = await getAdminData();
-                            io.to('admin_room').emit('adminUpdate', adminData);
-                        }
-                     }, 500);
-                } else {
+                            if (changed) {
+               // Check if the banned user is in a room and notify other users
+               if (targetSocket.currentRoom && rooms[targetSocket.currentRoom]) {
+                   const roomId = targetSocket.currentRoom;
+                   const banMessage = `${username} was banned by admin`;
+                   
+                   // Add ban message to room log
+                   const banLogEntry = {
+                       type: 'ban',
+                       username: username,
+                       message: banMessage,
+                       timestamp: Date.now()
+                   };
+                   
+                   await addLog(roomId, banLogEntry);
+                   
+                   // Send ban message to all users in the room
+                   io.to(roomId).emit('newMessage', banLogEntry);
+               }
+               
+               targetSocket.emit('banned', 'You were banned');
+               targetSocket.disconnect(true);
+                // Update admin panel immediately
+                if (io.sockets.adapter.rooms.has('admin_room')) {
+                    const adminData = await getAdminData();
+                    io.to('admin_room').emit('adminUpdate', adminData);
+                }
+            } else {
                     console.log(`Admin ${socket.username} ban attempt resulted in no change for ${username}`);
                     socket.emit('errorMsg', 'User/IP already banned or no option selected.');
                 }

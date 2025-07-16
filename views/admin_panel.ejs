@@ -127,7 +127,7 @@
                             <td>
                                 <% if (!user.isAdmin) { %> <!-- Don't allow kicking/banning other admins -->
                                 <button class="kick-btn" data-socket-id="<%= user.socketId %>">Kick</button>
-                                <button class="ban-btn" data-socket-id="<%= user.socketId %>" data-username="<%= user.username %>" data-ip="<%= user.ipAddress %>">Ban (User/IP)</button>
+                                <button class="ban-btn" data-socket-id="<%= user.socketId %>" data-username="<%= user.username %>" data-ip="<%= user.ipAddress %>">Ban (IP)</button>
                                 <% } else { %>
                                     (Admin)
                                 <% } %>
