@@ -1447,6 +1447,16 @@ io.on('connection', (socket) => {
                targetSocket.emit('banned', 'You were banned');
                // Mark socket as banned to prevent disconnect handler from updating admin panel
                targetSocket.isBanned = true;
+               
+               // Destroy the user's session to force logout
+               if (targetSocket.request.session) {
+                   targetSocket.request.session.destroy(err => {
+                       if (err) {
+                           console.error('Error destroying session for banned user:', err);
+                       }
+                   });
+               }
+               
                // Add a small delay before disconnecting to ensure the banned event is processed
                setTimeout(() => {
                    targetSocket.disconnect(true);
