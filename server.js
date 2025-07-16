@@ -12,34 +12,54 @@ const geoip = require('geoip-lite');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 
-// ================== PERSISTENCE SETUP ==================
-const dbFilePath = '/data/db.json'; // Glitch persistent storage
+// ================== MONGODB SETUP ==================
+const { connectDB, initializeDatabase, startSessionCleanup, operations } = require('./database');
 
-function readDb() {
+// Initialize MongoDB connection
+connectDB().then(() => {
+    initializeDatabase();
+    loadRoomsFromDatabase();
+    startSessionCleanup();
+}).catch(error => {
+    console.error('Failed to connect to MongoDB:', error);
+    process.exit(1);
+});
+
+// Load existing rooms from database on startup
+async function loadRoomsFromDatabase() {
     try {
-        if (fs.existsSync(dbFilePath)) {
-            const data = fs.readFileSync(dbFilePath);
-            console.log("Read DB data successfully.");
-            return JSON.parse(data);
+        const dbRooms = await operations.room.getAll();
+        for (const dbRoom of dbRooms) {
+            // Only load rooms that don't already exist in memory
+            if (!rooms[dbRoom.roomId]) {
+                rooms[dbRoom.roomId] = {
+                    name: dbRoom.name,
+                    maxUsers: dbRoom.maxUsers,
+                    password: dbRoom.password,
+                    users: new Map(),
+                    logs: [],
+                    isHidden: dbRoom.isHidden,
+                    createdBy: dbRoom.createdBy,
+                    createdAt: dbRoom.createdAt
+                };
+                
+                // Load recent messages from MongoDB
+                const recentMessages = await operations.message.getRecentByRoom(dbRoom.roomId);
+                rooms[dbRoom.roomId].logs = recentMessages.map(msg => ({
+                    type: msg.type,
+                    username: msg.username,
+                    isAdmin: msg.isAdmin,
+                    message: msg.message,
+                    url: msg.imageUrl,
+                    timestamp: msg.timestamp.getTime()
+                }));
+            }
         }
-        console.log("DB file not found, returning default.");
-    } catch (err) {
-        console.error("Error reading DB file:", err);
-    }
-    // Default structure if file doesn't exist or is invalid
-    return { bans: [] }; // Store banned IPs/Usernames
-}
-
-function writeDb(data) {
-    try {
-        fs.writeFileSync(dbFilePath, JSON.stringify(data, null, 2)); // Pretty print JSON
-        console.log("Wrote DB data successfully.");
-    } catch (err) {
-        console.error("Error writing DB file:", err);
+        console.log(`Loaded ${dbRooms.length} rooms from database`);
+    } catch (error) {
+        console.error('Error loading rooms from database:', error);
     }
 }
-
-let dbData = readDb(); // Load bans on startup
 
 // ================== PASSWORD UTILITIES ==================
 const SALT_ROUNDS = 12;
@@ -175,58 +195,94 @@ function getRealIpAddress(req) {
     return ip;
 }
 
-function getRoomInfoList() {
-    return Object.entries(rooms)
-        .filter(([roomId, room]) => !room.isHidden) // Don't list hidden rooms
-        .map(([roomId, room]) => ({
-            id: roomId,
+async function getRoomInfoList() {
+    try {
+        const visibleRooms = await operations.room.getVisible();
+        return visibleRooms.map(room => ({
+            id: room.roomId,
             name: room.name,
-            userCount: room.users.size,
+            userCount: rooms[room.roomId] ? rooms[room.roomId].users.size : 0,
             maxUsers: room.maxUsers,
             hasPassword: !!room.password // Boolean flag if password exists
         }));
+    } catch (error) {
+        console.error('Error getting room info list:', error);
+        return [];
+    }
 }
 
-function getAdminData() {
-    const allUsers = [];
-    // Iterate over connected sockets
-    io.sockets.sockets.forEach(socket => {
-        // Only include users who have successfully joined (have username/session)
-        if (socket.username) {
-             const ip = getRealIpAddress(socket.request);
-             const geo = geoip.lookup(ip); // geoip-lite handles private IPs returning null
-             allUsers.push({
-                 socketId: socket.id,
-                 username: socket.username,
-                 roomId: socket.currentRoom, // The ID of the room the user is currently in
-                 roomName: socket.currentRoom && rooms[socket.currentRoom] ? rooms[socket.currentRoom].name : 'Lobby/Main', // Room name or Lobby
-                 ipAddress: ip,
-                 country: geo ? geo.country : '?', // Display country code or '?'
-                 isAdmin: socket.isAdmin || false
-             });
-        }
-    });
-    const allRooms = Object.entries(rooms).map(([id, room]) => ({
-        id: id,
-        name: room.name,
-        userCount: room.users.size,
-        maxUsers: room.maxUsers,
-        isHidden: room.isHidden,
-        users: Array.from(room.users.values()).map(u => u.username) // List of usernames in the room
-    }));
-    return { users: allUsers, rooms: allRooms, bans: dbData.bans };
+async function getAdminData() {
+    try {
+        const allUsers = [];
+        // Iterate over connected sockets
+        io.sockets.sockets.forEach(socket => {
+            // Only include users who have successfully joined (have username/session)
+            if (socket.username) {
+                 const ip = getRealIpAddress(socket.request);
+                 const geo = geoip.lookup(ip); // geoip-lite handles private IPs returning null
+                 allUsers.push({
+                     socketId: socket.id,
+                     username: socket.username,
+                     roomId: socket.currentRoom, // The ID of the room the user is currently in
+                     roomName: socket.currentRoom && rooms[socket.currentRoom] ? rooms[socket.currentRoom].name : 'Lobby/Main', // Room name or Lobby
+                     ipAddress: ip,
+                     country: geo ? geo.country : '?', // Display country code or '?'
+                     isAdmin: socket.isAdmin || false
+                 });
+            }
+        });
+        
+        const allRooms = Object.entries(rooms).map(([id, room]) => ({
+            id: id,
+            name: room.name,
+            userCount: room.users.size,
+            maxUsers: room.maxUsers,
+            isHidden: room.isHidden,
+            users: Array.from(room.users.values()).map(u => u.username) // List of usernames in the room
+        }));
+        
+        const bans = await operations.ban.getBannedValues();
+        
+        return { users: allUsers, rooms: allRooms, bans: bans };
+    } catch (error) {
+        console.error('Error getting admin data:', error);
+        return { users: [], rooms: [], bans: [] };
+    }
 }
 
-function addLog(roomId, logEntry) {
-    if (rooms[roomId]) {
+async function addLog(roomId, logEntry) {
+    try {
         if (!logEntry.timestamp) logEntry.timestamp = Date.now(); // Ensure timestamp
-        rooms[roomId].logs.push(logEntry);
-        // DISABLED: Limit log size to prevent memory issues
-        // if (rooms[roomId].logs.length > 150) { // Keep last 150 entries
-        //     rooms[roomId].logs.shift();
-        // }
-    } else {
-        // console.warn(`Attempted to add log to non-existent room: ${roomId}`);
+        
+        // Always persist to MongoDB first
+        const messageData = {
+            roomId: roomId,
+            type: logEntry.type,
+            username: logEntry.type === 'system' ? 'System' : (logEntry.username || 'Unknown'),
+            isAdmin: logEntry.isAdmin || false,
+            message: logEntry.message,
+            imageUrl: logEntry.url, // For image logs
+            timestamp: new Date(logEntry.timestamp)
+        };
+        
+        await operations.message.create(messageData);
+        
+        // Update room activity in MongoDB
+        await operations.room.updateActivity(roomId);
+        
+        // Add to in-memory logs if room exists in memory
+        if (rooms[roomId]) {
+            rooms[roomId].logs.push(logEntry);
+            
+            // Limit in-memory log size to prevent memory issues
+            if (rooms[roomId].logs.length > 150) { // Keep last 150 entries
+                rooms[roomId].logs.shift();
+            }
+        } else {
+            console.warn(`Room ${roomId} not in memory, but log saved to database`);
+        }
+    } catch (error) {
+        console.error('Error adding log:', error);
     }
 }
 
@@ -252,40 +308,70 @@ app.get('/', (req, res) => {
     }
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const username = req.body.username?.trim();
     const ip = req.ip; // Get user's IP address
 
     if (!username || username.length < 3 || username.length > 20) { // Add max length
         return res.render('login', { error: 'Username must be 3-20 characters.' });
     }
-    // Basic check for banned username/IP
-    if (dbData.bans.includes(username) || dbData.bans.includes(ip)) {
-        return res.render('login', { error: 'You are banned from this service.' });
-    }
 
-    // Store user info in session
-    req.session.username = username;
-    req.session.isAdmin = false; // Regular users are not admins
-    req.session.save(err => { // Ensure session is saved before redirecting
-         if (err) {
-              return res.render('login', { error: 'Login failed, please try again.' });
-         }
+    try {
+        // Check if user or IP is banned
+        const isUsernameBanned = await operations.ban.isValueBanned(username);
+        const isIpBanned = await operations.ban.isValueBanned(ip);
         
-        // Get the current number of connected users
-        const connectedUsers = io.sockets.sockets.size;
+        if (isUsernameBanned || isIpBanned) {
+            return res.render('login', { error: 'You are banned from this service.' });
+        }
 
-        // Broadcast both events - this ensures all clients get both updates
-        io.to('main_lobby').emit('roomListUpdate', {
-            rooms: getRoomInfoList(),
-            connectedUsers: connectedUsers
+        // Find or create user
+        let user = await operations.user.findByUsername(username);
+        const geo = geoip.lookup(ip);
+        
+        if (!user) {
+            // Create new user (no password required for regular users)
+            user = await operations.user.create({
+                username: username,
+                isAdmin: false,
+                ipAddress: ip,
+                country: geo ? geo.country : '?'
+            });
+        } else {
+            // Update last seen and IP
+            await operations.user.updateLastSeen(username);
+        }
+
+        // Store user info in session
+        req.session.username = username;
+        req.session.isAdmin = user.isAdmin;
+        req.session.save(err => { // Ensure session is saved before redirecting
+             if (err) {
+                  return res.render('login', { error: 'Login failed, please try again.' });
+             }
+            
+            // Get the current number of connected users
+            const connectedUsers = io.sockets.sockets.size;
+
+            // Broadcast both events - this ensures all clients get both updates
+            getRoomInfoList().then(roomList => {
+                io.to('main_lobby').emit('roomListUpdate', {
+                    rooms: roomList,
+                    connectedUsers: connectedUsers
+                });
+            }).catch(error => {
+                console.error('Error getting room list for login broadcast:', error);
+            });
+            
+            // Add this explicit userCountUpdate broadcast 
+            io.to('main_lobby').emit('userCountUpdate', connectedUsers);
+            
+            res.redirect('/main');
         });
-        
-        // Add this explicit userCountUpdate broadcast 
-        io.to('main_lobby').emit('userCountUpdate', connectedUsers);
-        
-        res.redirect('/main');
-    });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.render('login', { error: 'Login failed, please try again.' });
+    }
 });
 
 app.post('/logout', (req, res) => {
@@ -301,9 +387,13 @@ app.post('/logout', (req, res) => {
         // Remove setTimeout and broadcast immediately
         const connectedUsers = io.sockets.sockets.size;
         io.to('main_lobby').emit('userCountUpdate', connectedUsers);
-        io.to('main_lobby').emit('roomListUpdate', {
-            rooms: getRoomInfoList(),
-            connectedUsers: connectedUsers
+        getRoomInfoList().then(roomList => {
+            io.to('main_lobby').emit('roomListUpdate', {
+                rooms: roomList,
+                connectedUsers: connectedUsers
+            });
+        }).catch(error => {
+            console.error('Error getting room list for logout broadcast:', error);
         });
 
         res.redirect('/'); // Redirect to login page
@@ -311,15 +401,26 @@ app.post('/logout', (req, res) => {
 });
 
 // --- Main Room List ---
-app.get('/main', requireLogin, (req, res) => {
-    const connectedUsers = io.sockets.sockets.size;
-    
-    res.render('main', {
-        username: req.session.username,
-        rooms: getRoomInfoList(),
-        isAdmin: req.session.isAdmin || false,
-        connectedUsers: connectedUsers // Add initial user count
-    });
+app.get('/main', requireLogin, async (req, res) => {
+    try {
+        const connectedUsers = io.sockets.sockets.size;
+        const roomList = await getRoomInfoList();
+        
+        res.render('main', {
+            username: req.session.username,
+            rooms: roomList,
+            isAdmin: req.session.isAdmin || false,
+            connectedUsers: connectedUsers // Add initial user count
+        });
+    } catch (error) {
+        console.error('Error loading main page:', error);
+        res.render('main', {
+            username: req.session.username,
+            rooms: [],
+            isAdmin: req.session.isAdmin || false,
+            connectedUsers: io.sockets.sockets.size
+        });
+    }
 });
 
 // --- Room Creation ---
@@ -349,6 +450,17 @@ app.post('/create-room', requireLogin, async (req, res) => {
             console.log(`Password set and hashed for room '${roomName}' by ${creator}`);
         }
         
+        // Create room in MongoDB
+        await operations.room.create({
+            roomId: roomId,
+            name: roomName,
+            maxUsers: max,
+            password: hashedPassword,
+            isHidden: false,
+            createdBy: creator
+        });
+        
+        // Create in-memory room structure for active connections
         rooms[roomId] = {
             name: roomName,
             maxUsers: max,
@@ -359,6 +471,7 @@ app.post('/create-room', requireLogin, async (req, res) => {
             createdBy: creator, // Track who created it
             createdAt: Date.now()
         };
+        
         console.log(`Room created: '${roomName}' (${roomId}) by ${creator}`);    
         
         // Grant access to the creator if a password was set
@@ -386,44 +499,78 @@ app.post('/create-room', requireLogin, async (req, res) => {
 });
 
 // --- Room Access ---
-app.get('/room/:roomId', requireLogin, (req, res) => {
+app.get('/room/:roomId', requireLogin, async (req, res) => {
     const roomId = req.params.roomId;
-    const room = rooms[roomId];
     const session = req.session;
 
-    if (!room) {
-        // console.log(`User ${session.username} tried to access non-existent room: ${roomId}`);
-        // TODO: Add flash message 'Room not found'
-        return res.redirect('/main');
-    }
+    try {
+        // Check if room exists in MongoDB
+        const dbRoom = await operations.room.findById(roomId);
+        if (!dbRoom) {
+            console.log(`User ${session.username} tried to access non-existent room: ${roomId}`);
+            // TODO: Add flash message 'Room not found'
+            return res.redirect('/main');
+        }
 
-    // Check password requirement
-    // Admins bypass password requirement
-    if (room.password && !session.isAdmin && !session[`room_${roomId}_access`]) {
-        // console.log(`User ${session.username} needs password for room: ${roomId}`);
-        return res.render('password_prompt', { roomId: roomId, roomName: room.name, error: null });
-    }
+        // Create in-memory room structure if it doesn't exist
+        if (!rooms[roomId]) {
+            rooms[roomId] = {
+                name: dbRoom.name,
+                maxUsers: dbRoom.maxUsers,
+                password: dbRoom.password,
+                users: new Map(),
+                logs: [],
+                isHidden: dbRoom.isHidden,
+                createdBy: dbRoom.createdBy,
+                createdAt: dbRoom.createdAt
+            };
+            
+            // Load recent messages from MongoDB
+            const recentMessages = await operations.message.getRecentByRoom(roomId);
+            rooms[roomId].logs = recentMessages.map(msg => ({
+                type: msg.type,
+                username: msg.username,
+                isAdmin: msg.isAdmin,
+                message: msg.message,
+                url: msg.imageUrl,
+                timestamp: msg.timestamp.getTime()
+            }));
+        }
 
-    // User is allowed, render the room page
-    res.render('room', {
-        username: session.username,
-        roomId: roomId,
-        roomName: room.name,
-        isAdmin: session.isAdmin || false // Pass admin status
-    });
+        const room = rooms[roomId];
+
+        // Check password requirement
+        // Admins bypass password requirement
+        if (room.password && !session.isAdmin && !session[`room_${roomId}_access`]) {
+            // console.log(`User ${session.username} needs password for room: ${roomId}`);
+            return res.render('password_prompt', { roomId: roomId, roomName: room.name, error: null });
+        }
+
+        // User is allowed, render the room page
+        res.render('room', {
+            username: session.username,
+            roomId: roomId,
+            roomName: room.name,
+            isAdmin: session.isAdmin || false // Pass admin status
+        });
+    } catch (error) {
+        console.error('Error accessing room:', error);
+        res.redirect('/main');
+    }
 });
 
 app.post('/room/:roomId/password', requireLogin, async (req, res) => {
      const roomId = req.params.roomId;
-     const room = rooms[roomId];
      const { password } = req.body;
      const session = req.session;
 
-     if (!room) return res.redirect('/main'); // Room disappeared?
-
      try {
+         // Check if room exists in MongoDB
+         const dbRoom = await operations.room.findById(roomId);
+         if (!dbRoom) return res.redirect('/main'); // Room disappeared?
+
          // Check password using bcrypt
-         if (room.password && await comparePassword(password, room.password)) {
+         if (dbRoom.password && await comparePassword(password, dbRoom.password)) {
              session[`room_${roomId}_access`] = true; // Grant access for this session
              session.save(err => { // Save session before redirect
                  if (err) console.error("Session save error on password grant:", err);
@@ -432,11 +579,11 @@ app.post('/room/:roomId/password', requireLogin, async (req, res) => {
              });
          } else {
              console.log(`User ${session.username} failed password attempt for room ${roomId}`);
-             res.render('password_prompt', { roomId: roomId, roomName: room.name, error: 'Incorrect password' });
+             res.render('password_prompt', { roomId: roomId, roomName: dbRoom.name, error: 'Incorrect password' });
          }
      } catch (error) {
          console.error('Error verifying room password:', error);
-         res.render('password_prompt', { roomId: roomId, roomName: room.name, error: 'Password verification failed, please try again.' });
+         res.render('password_prompt', { roomId: roomId, roomName: 'Unknown', error: 'Password verification failed, please try again.' });
      }
 });
 
@@ -491,20 +638,6 @@ app.post('/upload/:roomId', requireLogin, (req, res) => {
 
 
 // ================== ADMIN ROUTES ==================
-const ADMIN_USERNAME = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASSWORD_PLAIN = process.env.ADMIN_PASSWORD || 'password'; // Use environment variables!
-
-// Hash the admin password on startup for secure comparison
-let ADMIN_PASSWORD_HASH = null;
-(async () => {
-    try {
-        ADMIN_PASSWORD_HASH = await hashPassword(ADMIN_PASSWORD_PLAIN);
-        console.log('Admin password hashed successfully on startup');
-    } catch (error) {
-        console.error('Failed to hash admin password on startup:', error);
-        process.exit(1);
-    }
-})();
 
 app.get('/admin-login', (req, res) => {
     if (req.session.isAdmin) return res.redirect('/admin'); // Redirect if already logged in as admin
@@ -514,18 +647,19 @@ app.get('/admin-login', (req, res) => {
 app.post('/admin-login', async (req, res) => {
     const { username, password } = req.body;
     
-    // Check if admin password hash is ready
-    if (!ADMIN_PASSWORD_HASH) {
-        console.error('Admin password hash not ready');
-        return res.render('admin_login', { error: 'Server not ready, please try again.' });
-    }
-    
     try {
-        // Check username and password using bcrypt
-        const isValidUsername = username === ADMIN_USERNAME;
-        const isValidPassword = await comparePassword(password, ADMIN_PASSWORD_HASH);
+        // Find admin user in MongoDB
+        const adminUser = await operations.user.findByUsername(username);
         
-        if (isValidUsername && isValidPassword) {
+        if (!adminUser || !adminUser.isAdmin) {
+            console.log(`Failed admin login attempt: User '${username}' not found or not admin`);
+            return res.render('admin_login', { error: 'Invalid admin credentials' });
+        }
+        
+        // Check password using bcrypt
+        const isValidPassword = await comparePassword(password, adminUser.password);
+        
+        if (isValidPassword) {
             // Regenerate session ID upon login for security
             req.session.regenerate(err => {
                 if (err) {
@@ -536,10 +670,14 @@ app.post('/admin-login', async (req, res) => {
                 req.session.username = username;
                 req.session.isAdmin = true;
                 console.log("Admin logged in:", username);
+                
+                // Update last seen for admin user
+                operations.user.updateLastSeen(username);
+                
                 res.redirect('/admin');
             });
         } else {
-            console.log(`Failed admin login attempt: User '${username}'`);
+            console.log(`Failed admin login attempt: Incorrect password for user '${username}'`);
             res.render('admin_login', { error: 'Invalid admin credentials' });
         }
     } catch (error) {
@@ -559,15 +697,30 @@ function requireAdmin(req, res, next) {
 }
 
 // Admin Panel Dashboard
-app.get('/admin', requireAdmin, (req, res) => {
-    res.render('admin_panel', getAdminData()); // Pass current user/room/ban data
+app.get('/admin', requireAdmin, async (req, res) => {
+    try {
+        const adminData = await getAdminData();
+        res.render('admin_panel', adminData); // Pass current user/room/ban data
+    } catch (error) {
+        console.error('Error loading admin panel:', error);
+        res.render('admin_panel', { users: [], rooms: [], bans: [] });
+    }
 });
 
 // Admin Action: Download Room Log
-app.get('/admin/download-log/:roomId', requireAdmin, (req, res) => {
+app.get('/admin/download-log/:roomId', requireAdmin, async (req, res) => {
     const roomId = req.params.roomId;
-    const room = rooms[roomId];
-    if (room) {
+    
+    try {
+        // Get room from database
+        const room = await operations.room.findById(roomId);
+        if (!room) {
+            return res.status(404).send('Room not found');
+        }
+
+        // Get all messages for this room from MongoDB
+        const messages = await operations.message.getByRoom(roomId, 1000); // Get up to 1000 messages
+        
         // Set headers for a .txt file download
         res.setHeader('Content-Disposition', `attachment; filename="log_${room.name.replace(/[^a-z0-9]/gi, '_')}_${roomId}.txt"`);
         res.setHeader('Content-Type', 'text/plain');
@@ -576,9 +729,9 @@ app.get('/admin/download-log/:roomId', requireAdmin, (req, res) => {
         const timezoneOffset = parseInt(req.query.tz) || 0;
 
         // Format logs into a human-readable string
-        const logString = room.logs.map(entry => {
+        const logString = messages.reverse().map(entry => {
             // Apply timezone offset to get local time
-            const localTime = new Date(entry.timestamp - (timezoneOffset * 60000));
+            const localTime = new Date(entry.timestamp.getTime() - (timezoneOffset * 60000));
             const time = localTime.toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' });
             const user = entry.username || 'System';
             let messageDetails = '';
@@ -588,7 +741,7 @@ app.get('/admin/download-log/:roomId', requireAdmin, (req, res) => {
                     messageDetails = `${user}: ${entry.message}`;
                     break;
                 case 'image':
-                    messageDetails = `${user} uploaded an image: ${entry.url}`;
+                    messageDetails = `${user} uploaded an image: ${entry.imageUrl}`;
                     break;
                 case 'join':
                     messageDetails = `${user} joined.`;
@@ -609,8 +762,9 @@ app.get('/admin/download-log/:roomId', requireAdmin, (req, res) => {
         }).join('\n');
 
         res.send(logString);
-    } else {
-        res.status(404).send('Room not found');
+    } catch (error) {
+        console.error('Error downloading room log:', error);
+        res.status(500).send('Error retrieving room log');
     }
 });
 
@@ -663,19 +817,28 @@ io.on('connection', (socket) => {
     }
 
     // --- Handle Main Lobby Join ---
-    socket.on('joinMainLobby', () => {
+    socket.on('joinMainLobby', async () => {
          // Make sure we're tracking 'main_lobby' joins
          socket.join('main_lobby');
 
          // Send current room list
-         socket.emit('roomListUpdate', {
-             rooms: getRoomInfoList(),
-             connectedUsers: io.sockets.sockets.size // Total connected users
-         });
+         try {
+             const roomList = await getRoomInfoList();
+             socket.emit('roomListUpdate', {
+                 rooms: roomList,
+                 connectedUsers: io.sockets.sockets.size // Total connected users
+             });
+         } catch (error) {
+             console.error('Error getting room list for main lobby join:', error);
+             socket.emit('roomListUpdate', {
+                 rooms: [],
+                 connectedUsers: io.sockets.sockets.size
+             });
+         }
     });
 
     // --- Handle Room Joining ---
-    socket.on('joinRoom', ({ roomId }) => {
+    socket.on('joinRoom', async ({ roomId }) => {
         if (!socket.username) return; // Should not happen due to check above
 
         const room = rooms[roomId];
@@ -701,7 +864,10 @@ io.on('connection', (socket) => {
 
         // 4. Check for bans
         const ip = getRealIpAddress(socket.request);
-        if (dbData.bans.includes(socket.username) || dbData.bans.includes(ip)) {
+        const isUsernameBanned = await operations.ban.isValueBanned(socket.username);
+        const isIpBanned = await operations.ban.isValueBanned(ip);
+        
+        if (isUsernameBanned || isIpBanned) {
             //  console.log(`Banned user ${socket.username} or IP ${ip} denied joining room ${roomId}`);
              socket.emit('errorMsg', 'You are banned.');
              return socket.disconnect(true);
@@ -726,13 +892,37 @@ io.on('connection', (socket) => {
 
                 // Check if previous room became empty
                 if (prevRoom.users.size === 0) {
-                    // console.log(`Deleting empty room after user left: ${prevRoom.name} (${prevRoomId})`);
+                    console.log(`Deleting empty room after user left: ${prevRoom.name} (${prevRoomId})`);
+                    
+                    // Delete from MongoDB
+                    operations.room.delete(prevRoomId).catch(error => {
+                        console.error('Error deleting empty room from database:', error);
+                    });
+                    
+                    // Delete from memory
                     delete rooms[prevRoomId];
+                    
                     // Notify admin panel about room deletion
                     if (io.sockets.adapter.rooms.has('admin_room')) {
-                        io.to('admin_room').emit('adminUpdate', getAdminData());
+                        getAdminData().then(adminData => {
+                            io.to('admin_room').emit('adminUpdate', adminData);
+                        }).catch(error => {
+                            console.error('Error getting admin data for room deletion:', error);
+                        });
                     }
-                     // TODO: Optionally broadcast room list update to main lobby?
+                    
+                    // Notify main lobby about room deletion
+                    if (io.sockets.adapter.rooms.has('main_lobby')) {
+                        io.to('main_lobby').emit('roomDeleted', prevRoomId);
+                        getRoomInfoList().then(roomList => {
+                            io.to('main_lobby').emit('roomListUpdate', {
+                                rooms: roomList,
+                                connectedUsers: io.sockets.sockets.size
+                            });
+                        }).catch(error => {
+                            console.error('Error getting room list for room deletion:', error);
+                        });
+                    }
                 }
             }
         }
@@ -774,9 +964,13 @@ io.on('connection', (socket) => {
         });
 
         // Send current room list
-        io.emit('roomListUpdate', {
-            rooms: getRoomInfoList(),
-            connectedUsers: io.sockets.sockets.size // Total connected users
+        getRoomInfoList().then(roomList => {
+            io.emit('roomListUpdate', {
+                rooms: roomList,
+                connectedUsers: io.sockets.sockets.size // Total connected users
+            });
+        }).catch(error => {
+            console.error('Error getting room list for join room broadcast:', error);
         });
     });
 
@@ -822,7 +1016,7 @@ io.on('connection', (socket) => {
     });
 
     // --- Handle Room Settings Update ---
-    socket.on('updateRoomSettings', ({ roomId, roomName, maxUsers }) => {
+    socket.on('updateRoomSettings', async ({ roomId, roomName, maxUsers }) => {
         // console.log(`[Server] Received room settings update for ${roomId}`);
 
         // Safety checks
@@ -884,16 +1078,32 @@ io.on('connection', (socket) => {
 
         // All checks passed, update the room
         const oldName = room.name;
-        room.name = roomName;
-        room.maxUsers = max;
+        
+        try {
+            // Update room in MongoDB
+            await operations.room.update(roomId, {
+                name: roomName,
+                maxUsers: max
+            });
+            
+            // Update in-memory room
+            room.name = roomName;
+            room.maxUsers = max;
 
-        // console.log(`Room ${roomId} updated: Name changed from "${oldName}" to "${roomName}", Max users set to ${max}`);
+            console.log(`Room ${roomId} updated: Name changed from "${oldName}" to "${roomName}", Max users set to ${max}`);
 
-        // Add a system log entry
-        addLog(roomId, {
-            type: 'system',
-            message: `Room settings updated by ${socket.username}${socket.isAdmin ? ' (Admin)' : ''}. Name: "${oldName}" → "${roomName}", Max users: ${max}`
-        });
+            // Add a system log entry
+            await addLog(roomId, {
+                type: 'system',
+                message: `Room settings updated by ${socket.username}${socket.isAdmin ? ' (Admin)' : ''}. Name: "${oldName}" → "${roomName}", Max users: ${max}`
+            });
+        } catch (error) {
+            console.error('Error updating room settings:', error);
+            return socket.emit('roomSettingsUpdated', {
+                success: false,
+                message: 'Failed to update room settings'
+            });
+        }
 
         // Notify all users in the room
         io.to(roomId).emit('roomSettingsUpdated', {
@@ -934,10 +1144,16 @@ io.on('connection', (socket) => {
     });
 
     // --- Admin Socket Actions ---
-    socket.on('adminJoin', () => { // For when admin panel page loads/connects
+    socket.on('adminJoin', async () => { // For when admin panel page loads/connects
          if (socket.isAdmin) {
              socket.join('admin_room'); // Join a dedicated room for admin updates
-             socket.emit('adminUpdate', getAdminData()); // Send initial data
+             try {
+                 const adminData = await getAdminData();
+                 socket.emit('adminUpdate', adminData); // Send initial data
+             } catch (error) {
+                 console.error('Error getting admin data for admin join:', error);
+                 socket.emit('adminUpdate', { users: [], rooms: [], bans: [] });
+             }
          }
     });
 
@@ -949,9 +1165,14 @@ io.on('connection', (socket) => {
             targetSocket.emit('kicked', 'You have been kicked by an admin.');
             targetSocket.disconnect(true); // Force disconnect
              // Update admin panel shortly after disconnect
-             setTimeout(() => {
+             setTimeout(async () => {
                   if (io.sockets.adapter.rooms.has('admin_room')) {
-                     io.to('admin_room').emit('adminUpdate', getAdminData());
+                     try {
+                         const adminData = await getAdminData();
+                         io.to('admin_room').emit('adminUpdate', adminData);
+                     } catch (error) {
+                         console.error('Error getting admin data for kick update:', error);
+                     }
                   }
              }, 500);
         } else {
@@ -960,7 +1181,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('adminBanUser', ({ socketIdToBan, banUsername, banIp }) => {
+    socket.on('adminBanUser', async ({ socketIdToBan, banUsername, banIp }) => {
         if (!socket.isAdmin) return socket.emit('errorMsg', 'Permission denied.');
         const targetSocket = io.sockets.sockets.get(socketIdToBan);
 
@@ -970,32 +1191,47 @@ io.on('connection', (socket) => {
             let changed = false;
             let bannedValue = '';
 
-            if (banUsername && username && !dbData.bans.includes(username)) {
-                dbData.bans.push(username);
-                // console.log(`Admin ${socket.username} banning username: ${username}`);
-                bannedValue = username;
-                changed = true;
-            }
-            if (banIp && ip && !dbData.bans.includes(ip)) {
-                dbData.bans.push(ip);
-                //  console.log(`Admin ${socket.username} banning IP: ${ip}`);
-                 bannedValue = ip; // IP takes precedence for message if both banned
-                changed = true;
-            }
+            try {
+                if (banUsername && username && !(await operations.ban.isValueBanned(username))) {
+                    await operations.ban.create({
+                        value: username,
+                        type: 'username',
+                        bannedBy: socket.username,
+                        reason: 'Admin ban'
+                    });
+                    console.log(`Admin ${socket.username} banning username: ${username}`);
+                    bannedValue = username;
+                    changed = true;
+                }
+                if (banIp && ip && !(await operations.ban.isValueBanned(ip))) {
+                    await operations.ban.create({
+                        value: ip,
+                        type: 'ip',
+                        bannedBy: socket.username,
+                        reason: 'Admin ban'
+                    });
+                    console.log(`Admin ${socket.username} banning IP: ${ip}`);
+                    bannedValue = ip; // IP takes precedence for message if both banned
+                    changed = true;
+                }
 
-            if (changed) {
-               writeDb(dbData); // Persist bans
-               targetSocket.emit('banned', `You have been banned (${bannedValue}).`);
-               targetSocket.disconnect(true);
-                // Update admin panel shortly after disconnect
-                 setTimeout(() => {
-                    if (io.sockets.adapter.rooms.has('admin_room')) {
-                        io.to('admin_room').emit('adminUpdate', getAdminData());
-                    }
-                 }, 500);
-            } else {
-                // console.log(`Admin ${socket.username} ban attempt resulted in no change for ${username}`);
-                socket.emit('errorMsg', 'User/IP already banned or no option selected.');
+                if (changed) {
+                   targetSocket.emit('banned', `You have been banned (${bannedValue}).`);
+                   targetSocket.disconnect(true);
+                    // Update admin panel shortly after disconnect
+                     setTimeout(async () => {
+                        if (io.sockets.adapter.rooms.has('admin_room')) {
+                            const adminData = await getAdminData();
+                            io.to('admin_room').emit('adminUpdate', adminData);
+                        }
+                     }, 500);
+                } else {
+                    console.log(`Admin ${socket.username} ban attempt resulted in no change for ${username}`);
+                    socket.emit('errorMsg', 'User/IP already banned or no option selected.');
+                }
+            } catch (error) {
+                console.error('Error banning user:', error);
+                socket.emit('errorMsg', 'Error banning user.');
             }
         } else {
              console.warn(`Admin ${socket.username} failed ban: Target ${socketIdToBan} not found or is admin.`);
@@ -1003,65 +1239,91 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('adminDeleteRoom', ({ roomIdToDelete }) => {
+    socket.on('adminDeleteRoom', async ({ roomIdToDelete }) => {
         if (!socket.isAdmin) return socket.emit('errorMsg', 'Permission denied.');
-        const roomToDelete = rooms[roomIdToDelete];
+        
+        try {
+            const roomToDelete = await operations.room.findById(roomIdToDelete);
 
-        if (roomToDelete) {
-            const roomName = roomToDelete.name;
-            // console.log(`Admin ${socket.username} deleting room '${roomName}' (${roomIdToDelete})`);
+            if (roomToDelete) {
+                const roomName = roomToDelete.name;
+                console.log(`Admin ${socket.username} deleting room '${roomName}' (${roomIdToDelete})`);
 
-            // Use io.to().emit() to notify users *before* disconnecting them
-             io.to(roomIdToDelete).emit('roomDeleted', 'This room has been deleted by an admin.');
+                // Use io.to().emit() to notify users *before* disconnecting them
+                 io.to(roomIdToDelete).emit('roomDeleted', 'This room has been deleted by an admin.');
 
-            // Disconnect sockets associated with that room using io.in().disconnect()
-            io.in(roomIdToDelete).disconnectSockets(true); // true = close connection immediately
+                // Disconnect sockets associated with that room using io.in().disconnect()
+                io.in(roomIdToDelete).disconnectSockets(true); // true = close connection immediately
 
-            // Delete the room from the main structure *after* signaling clients
-            delete rooms[roomIdToDelete];
-            // console.log(`Room object deleted for ${roomIdToDelete}`);
+                // Delete the room from MongoDB and in-memory structure
+                await operations.room.delete(roomIdToDelete);
+                delete rooms[roomIdToDelete];
+                console.log(`Room deleted from database and memory: ${roomIdToDelete}`);
 
-            // Notify main lobby about room deletion
-            if (io.sockets.adapter.rooms.has('main_lobby')) {
-                io.to('main_lobby').emit('roomDeleted', roomIdToDelete); // Send ID of deleted room
-                // console.log(`Notified main lobby of room deletion: ${roomIdToDelete}`);
+                // Notify main lobby about room deletion
+                if (io.sockets.adapter.rooms.has('main_lobby')) {
+                    io.to('main_lobby').emit('roomDeleted', roomIdToDelete); // Send ID of deleted room
+                    console.log(`Notified main lobby of room deletion: ${roomIdToDelete}`);
+                }
+
+                // Update admin panel
+                if (io.sockets.adapter.rooms.has('admin_room')) {
+                    console.log(' > Emitting adminUpdate after room deletion');
+                    const adminData = await getAdminData();
+                    io.to('admin_room').emit('adminUpdate', adminData);
+                }
+
+            } else {
+                console.log(`Admin ${socket.username} tried to delete non-existent room: ${roomIdToDelete}`);
+                socket.emit('errorMsg', 'Room not found, cannot delete.');
             }
-
-            // Update admin panel
-            if (io.sockets.adapter.rooms.has('admin_room')) {
-                // console.log(' > Emitting adminUpdate after room deletion');
-                io.to('admin_room').emit('adminUpdate', getAdminData());
-            }
-
-        } else {
-            // console.log(`Admin ${socket.username} tried to delete non-existent room: ${roomIdToDelete}`);
-            socket.emit('errorMsg', 'Room not found, cannot delete.');
+        } catch (error) {
+            console.error('Error deleting room:', error);
+            socket.emit('errorMsg', 'Error deleting room.');
         }
     });
 
-    socket.on('adminToggleHideRoom', ({ roomIdToToggle }) => {
+    socket.on('adminToggleHideRoom', async ({ roomIdToToggle }) => {
         if (!socket.isAdmin) return socket.emit('errorMsg', 'Permission denied.');
-        const roomToToggle = rooms[roomIdToToggle];
-        if (roomToToggle) {
-            roomToToggle.isHidden = !roomToToggle.isHidden;
-            const status = roomToToggle.isHidden ? 'hidden' : 'visible';
-    
-            // Notify main lobby with a FULL room list update
-            if (io.sockets.adapter.rooms.has('main_lobby')) {
-                // Send a complete room list update instead of individual events
-                const connectedUsers = io.sockets.sockets.size;
-                io.to('main_lobby').emit('roomListUpdate', {
-                    rooms: getRoomInfoList(),  // This already filters out hidden rooms
-                    connectedUsers: connectedUsers
-                });
+        
+        try {
+            const roomToToggle = await operations.room.findById(roomIdToToggle);
+            if (roomToToggle) {
+                const newHiddenStatus = !roomToToggle.isHidden;
+                
+                // Update room in MongoDB
+                await operations.room.update(roomIdToToggle, { isHidden: newHiddenStatus });
+                
+                // Update in-memory room if it exists
+                if (rooms[roomIdToToggle]) {
+                    rooms[roomIdToToggle].isHidden = newHiddenStatus;
+                }
+                
+                const status = newHiddenStatus ? 'hidden' : 'visible';
+                console.log(`Admin ${socket.username} toggled room ${roomIdToToggle} to ${status}`);
+        
+                // Notify main lobby with a FULL room list update
+                if (io.sockets.adapter.rooms.has('main_lobby')) {
+                    // Send a complete room list update instead of individual events
+                    const connectedUsers = io.sockets.sockets.size;
+                    const roomList = await getRoomInfoList();
+                    io.to('main_lobby').emit('roomListUpdate', {
+                        rooms: roomList,  // This already filters out hidden rooms
+                        connectedUsers: connectedUsers
+                    });
+                }
+        
+                // Update admin panel
+                if (io.sockets.adapter.rooms.has('admin_room')) {
+                    const adminData = await getAdminData();
+                    io.to('admin_room').emit('adminUpdate', adminData);
+                }
+            } else {
+                socket.emit('errorMsg', 'Room not found, cannot toggle hidden status.');
             }
-    
-            // Update admin panel
-            if (io.sockets.adapter.rooms.has('admin_room')) {
-                io.to('admin_room').emit('adminUpdate', getAdminData());
-            }
-        } else {
-            socket.emit('errorMsg', 'Room not found, cannot toggle hidden status.');
+        } catch (error) {
+            console.error('Error toggling room visibility:', error);
+            socket.emit('errorMsg', 'Error toggling room visibility.');
         }
     });
 
@@ -1094,17 +1356,39 @@ io.on('connection', (socket) => {
 
                 // Check if room is now empty and delete if necessary
                 if (room.users.size === 0) {
-                    // console.log(`Deleting empty room after last user disconnected: ${room.name} (${roomId})`);
+                    console.log(`Deleting empty room after last user disconnected: ${room.name} (${roomId})`);
+                    
+                    // Delete from MongoDB
+                    operations.room.delete(roomId).catch(error => {
+                        console.error('Error deleting empty room from database:', error);
+                    });
+                    
+                    // Delete from memory
                     delete rooms[roomId];
 
                     // Notify main lobby about room deletion
                     if (io.sockets.adapter.rooms.has('main_lobby')) {
                         io.to('main_lobby').emit('roomDeleted', roomId); // Send ID of deleted room
-                        // console.log(`Notified main lobby of room deletion: ${roomId}`);
+                        console.log(`Notified main lobby of room deletion: ${roomId}`);
+                        
+                        // Update room list
+                        getRoomInfoList().then(roomList => {
+                            io.to('main_lobby').emit('roomListUpdate', {
+                                rooms: roomList,
+                                connectedUsers: io.sockets.sockets.size
+                            });
+                        }).catch(error => {
+                            console.error('Error getting room list for room deletion:', error);
+                        });
                     }
+                    
                     // Notify admin panel about room deletion
                     if (io.sockets.adapter.rooms.has('admin_room')) {
-                        io.to('admin_room').emit('adminUpdate', getAdminData());
+                        getAdminData().then(adminData => {
+                            io.to('admin_room').emit('adminUpdate', adminData);
+                        }).catch(error => {
+                            console.error('Error getting admin data for room deletion:', error);
+                        });
                     }
 
                 } else {
@@ -1119,8 +1403,13 @@ io.on('connection', (socket) => {
         // Notify admin panel about the disconnection
         if (io.sockets.adapter.rooms.has('admin_room')) {
            // Use a small delay to ensure disconnect processing completes before update
-           setTimeout(() => {
-                io.to('admin_room').emit('adminUpdate', getAdminData());
+           setTimeout(async () => {
+                try {
+                    const adminData = await getAdminData();
+                    io.to('admin_room').emit('adminUpdate', adminData);
+                } catch (error) {
+                    console.error('Error getting admin data for disconnect update:', error);
+                }
            }, 100);
         }
 
@@ -1130,9 +1419,13 @@ io.on('connection', (socket) => {
             io.to('main_lobby').emit('userCountUpdate', connectedUsers);
             
             // Also send roomListUpdate for consistency
-            io.to('main_lobby').emit('roomListUpdate', {
-                rooms: getRoomInfoList(),
-                connectedUsers: connectedUsers
+            getRoomInfoList().then(roomList => {
+                io.to('main_lobby').emit('roomListUpdate', {
+                    rooms: roomList,
+                    connectedUsers: connectedUsers
+                });
+            }).catch(error => {
+                console.error('Error getting room list for disconnect broadcast:', error);
             });
         }
     });
