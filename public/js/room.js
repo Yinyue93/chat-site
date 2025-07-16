@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendButton = document.getElementById('send-button');
     const userList = document.getElementById('user-list');
     const soundToggle = document.getElementById('sound-toggle');
+    const exitButton = document.getElementById('exit-button');
     let typingIndicator = document.getElementById('typing-indicator');
 
     // Create the typing indicator if it doesn't exist
@@ -408,7 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sendButton) sendButton.disabled = true;
     });
 
-    socket.on('loadLogs', (logs) => {
+    socket.on('loadLogs', (logs, options) => {
         if (!chatLog) return;
         
         // Clear the chat log safely
@@ -447,7 +448,11 @@ document.addEventListener('DOMContentLoaded', () => {
              console.error("[RoomJS] Invalid 'loadLogs' data received.");
         }
 
-        logMessage(`<div class="system-message" style="color:blue;">Successfully joined room. Chat enabled.</div>`);
+        // Only show "Successfully joined room" message if it's not a quick reconnection
+        if (!options || !options.isQuickReconnect) {
+            logMessage(`<div class="system-message" style="color:blue;">Successfully joined room. Chat enabled.</div>`);
+        }
+        
         if (messageInput) messageInput.disabled = false;
         if (sendButton) sendButton.disabled = false;
         if (messageInput) messageInput.focus();
@@ -549,6 +554,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     socket.on('banned', (reason) => { /* similar handling */ });
     socket.on('roomDeleted', (reason) => { /* similar handling */ });
+
+    // Handle redirect to main lobby after exit
+    socket.on('redirectToMain', () => {
+        console.log('[RoomJS] Redirecting to main lobby after exit');
+        window.location.href = '/main';
+    });
 
     // Add this with your other socket event handlers
     socket.on('roomInfo', (roomData) => {
@@ -936,6 +947,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearTimeout(typingDebounceTimer);
                 socket.emit('userStoppedTyping');
             }
+        });
+    }
+    
+    // --- Exit Room Button Handler ---
+    if (exitButton) {
+        exitButton.addEventListener('click', () => {
+            console.log('[RoomJS] User explicitly exiting room');
+            socket.emit('exitRoom');
         });
     }
 }); // End DOMContentLoaded

@@ -308,6 +308,10 @@ const messageOps = {
 
     async countByRoom(roomId) {
         return await Message.countDocuments({ roomId });
+    },
+
+    async findOneAndDelete(query) {
+        return await Message.findOneAndDelete(query);
     }
 };
 

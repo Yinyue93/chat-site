@@ -165,6 +165,8 @@ let rooms = {};
 let userSockets = new Map();
 // roomDeletionTimers: Map<roomId, timeoutId> - Track pending room deletions
 let roomDeletionTimers = new Map();
+// recentDisconnections: Map<username, {roomId, timestamp}> - Track recent disconnections for quick reconnection detection
+let recentDisconnections = new Map();
 
 // ================== HELPER FUNCTIONS ==================
 
@@ -234,6 +236,43 @@ function cancelRoomDeletion(roomId) {
         roomDeletionTimers.delete(roomId);
         console.log(`Cancelled scheduled deletion of room ${roomId}`);
     }
+}
+
+// Helper function to track user disconnection for quick reconnection detection
+function trackDisconnection(username, roomId) {
+    recentDisconnections.set(username, {
+        roomId: roomId,
+        timestamp: Date.now()
+    });
+    
+    // Clean up old disconnection records after 10 seconds
+    setTimeout(() => {
+        if (recentDisconnections.has(username)) {
+            const disconnection = recentDisconnections.get(username);
+            if (disconnection.roomId === roomId && disconnection.timestamp) {
+                recentDisconnections.delete(username);
+            }
+        }
+    }, 10000);
+}
+
+// Helper function to check if user is quickly reconnecting (within 5 seconds)
+function isQuickReconnection(username, roomId) {
+    if (!recentDisconnections.has(username)) {
+        return false;
+    }
+    
+    const disconnection = recentDisconnections.get(username);
+    const timeSinceDisconnection = Date.now() - disconnection.timestamp;
+    
+    // If user disconnected from same room within 5 seconds, it's a quick reconnection
+    if (disconnection.roomId === roomId && timeSinceDisconnection < 5000) {
+        // Clean up the disconnection record since we've processed it
+        recentDisconnections.delete(username);
+        return true;
+    }
+    
+    return false;
 }
 
 // Helper function to extract real IP address from request/socket
@@ -353,6 +392,43 @@ async function addLog(roomId, logEntry) {
         }
     } catch (error) {
         console.error('Error adding log:', error);
+    }
+}
+
+// Function to remove recent leave message when user quickly reconnects
+async function removeRecentLeaveMessage(roomId, username) {
+    try {
+        // Remove from in-memory logs
+        if (rooms[roomId]) {
+            const recentLogs = rooms[roomId].logs;
+            const now = Date.now();
+            
+            // Find recent leave message from same user (within last 10 seconds)
+            for (let i = recentLogs.length - 1; i >= 0; i--) {
+                const log = recentLogs[i];
+                if (log.type === 'leave' && 
+                    log.username === username && 
+                    (now - log.timestamp) < 10000) { // Within 10 seconds
+                    
+                    // Remove from memory
+                    recentLogs.splice(i, 1);
+                    console.log(`Removed recent leave message for ${username} in room ${roomId}`);
+                    break;
+                }
+            }
+        }
+        
+        // Remove from MongoDB (find and delete recent leave message)
+        const tenSecondsAgo = new Date(Date.now() - 10000);
+        await operations.message.findOneAndDelete({
+            roomId: roomId,
+            type: 'leave',
+            username: username,
+            timestamp: { $gte: tenSecondsAgo }
+        });
+        
+    } catch (error) {
+        console.error('Error removing recent leave message:', error);
     }
 }
 
@@ -1019,14 +1095,24 @@ io.on('connection', (socket) => {
 
         // console.log(`${socket.username} ${socket.isAdmin ? '(Admin)' : ''} successfully joined room: ${room.name} (${roomId})`);
 
-        // Send recent chat history (logs) to the joining user
-        socket.emit('loadLogs', room.logs);
+        // Check if this is a quick reconnection (page refresh)
+        const isQuickReconnect = isQuickReconnection(socket.username, roomId);
 
-        // Notify everyone in the room about the new user
-        const joinMsg = { type: 'join', username: socket.username, isAdmin: socket.isAdmin, timestamp: Date.now() };
-        addLog(roomId, joinMsg);
-        io.to(roomId).emit('userJoined', joinMsg); // Send specific join message
-        io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username)); // Send updated user list
+        // Send recent chat history (logs) to the joining user, include reconnection info
+        socket.emit('loadLogs', room.logs, { isQuickReconnect: isQuickReconnect });
+
+        // Notify everyone in the room about the new user (suppress for quick reconnections)
+        if (!isQuickReconnect) {
+            const joinMsg = { type: 'join', username: socket.username, isAdmin: socket.isAdmin, timestamp: Date.now() };
+            addLog(roomId, joinMsg);
+            io.to(roomId).emit('userJoined', joinMsg); // Send specific join message
+        } else {
+            // Remove the recent leave message for quick reconnections
+            await removeRecentLeaveMessage(roomId, socket.username);
+        }
+        
+        // Always update user list regardless of reconnection type
+        io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
 
         // Notify admin panel about user joining the room
          if (io.sockets.adapter.rooms.has('admin_room')) {
@@ -1406,6 +1492,76 @@ io.on('connection', (socket) => {
         }
     });
 
+    // --- Handle Explicit Room Exit ---
+    socket.on('exitRoom', async () => {
+        if (!socket.username || !socket.currentRoom) {
+            console.warn(`User ${socket.username} tried to exit room but not in a room`);
+            return;
+        }
+
+        const room = rooms[socket.currentRoom];
+        const roomId = socket.currentRoom;
+        
+        if (!room || !room.users.has(socket.id)) {
+            console.warn(`User ${socket.username} tried to exit room ${roomId} but not found in room`);
+            return;
+        }
+
+        const userInfo = room.users.get(socket.id);
+        console.log(`User ${socket.username} explicitly exiting room ${room.name} (${roomId})`);
+
+        // Remove user from room
+        room.users.delete(socket.id);
+        socket.leave(roomId);
+        socket.currentRoom = null;
+
+        // Add leave message for explicit exit
+        const leaveMsg = { type: 'leave', username: userInfo.username, isAdmin: userInfo.isAdmin, timestamp: Date.now() };
+        await addLog(roomId, leaveMsg);
+        io.to(roomId).emit('userLeft', leaveMsg);
+        io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
+
+        // If room is now empty, delete it immediately (no grace period for explicit exits)
+        if (room.users.size === 0) {
+            console.log(`Immediately deleting room after explicit exit: ${room.name} (${roomId})`);
+            
+            // Cancel any pending delayed deletion
+            cancelRoomDeletion(roomId);
+            
+            try {
+                // Delete from MongoDB
+                await operations.room.delete(roomId);
+                
+                // Delete from memory
+                delete rooms[roomId];
+                
+                // Notify main lobby about room deletion
+                if (io.sockets.adapter.rooms.has('main_lobby')) {
+                    io.to('main_lobby').emit('roomDeleted', roomId);
+                    console.log(`Notified main lobby of room deletion: ${roomId}`);
+                    
+                    // Update room list
+                    const roomList = await getRoomInfoList();
+                    io.to('main_lobby').emit('roomListUpdate', {
+                        rooms: roomList,
+                        connectedUsers: io.sockets.sockets.size
+                    });
+                }
+                
+                // Notify admin panel about room deletion
+                if (io.sockets.adapter.rooms.has('admin_room')) {
+                    const adminData = await getAdminData();
+                    io.to('admin_room').emit('adminUpdate', adminData);
+                }
+            } catch (error) {
+                console.error('Error deleting room after explicit exit:', error);
+            }
+        }
+
+        // Redirect user to main lobby
+        socket.emit('redirectToMain');
+    });
+
     // --- Handle Disconnection ---
     socket.on('disconnect', (reason) => {
         // console.log(`Socket disconnected: ${socket.id}, User: ${socket.username}, Reason: ${reason}`);
@@ -1425,9 +1581,12 @@ io.on('connection', (socket) => {
                 const userInfo = room.users.get(socket.id); // Get info before deleting
                 room.users.delete(socket.id); // Remove user from room map
 
+                // Track disconnection for quick reconnection detection
+                trackDisconnection(userInfo.username, roomId);
+
                 // console.log(`${userInfo.username} left room: ${room.name} due to disconnect.`);
 
-                // Log and notify room
+                // Log and notify room (leave message will be suppressed if user quickly reconnects)
                 const leaveMsg = { type: 'leave', username: userInfo.username, isAdmin: userInfo.isAdmin, timestamp: Date.now() };
                 addLog(roomId, leaveMsg);
                 io.to(roomId).emit('userLeft', leaveMsg);
