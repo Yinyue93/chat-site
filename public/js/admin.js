@@ -24,11 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const usersTbody = document.getElementById('users-tbody');
     const roomsTbody = document.getElementById('rooms-tbody');
     const bansList = document.getElementById('bans-list');
+    const bansTbody = document.getElementById('bans-tbody');
     const userSearch = document.getElementById('user-search');
     const roomSearch = document.getElementById('room-search');
 
     // --- Check if Elements Were Found (Debugging) ---
-    if (!usersTbody || !roomsTbody || !bansList || !userSearch || !roomSearch || !userCountSpan || !roomCountSpan || !banCountSpan) {
+    if (!usersTbody || !roomsTbody || !userSearch || !roomSearch || !userCountSpan || !roomCountSpan || !banCountSpan) {
          console.error("[AdminJS] One or more required admin panel elements not found in the DOM. Check IDs in admin_panel.ejs.");
          return; // Stop if essential elements are missing
     }
@@ -114,13 +115,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
      function renderBans(bans) {
-        if (!bansList) return;
-        bansList.innerHTML = '';
-         if (!Array.isArray(bans)) { console.error("renderBans received non-array:", bans); return; }
+        if (!bansTbody) return;
+        bansTbody.innerHTML = '';
+        if (!Array.isArray(bans)) { console.error("renderBans received non-array:", bans); return; }
         bans.forEach(ban => {
-            const li = document.createElement('li');
-            li.textContent = escapeHtml(ban); // Escape the ban string
-            bansList.appendChild(li);
+            const row = bansTbody.insertRow();
+            const bannedAt = new Date(ban.bannedAt).toLocaleString();
+            row.innerHTML = `
+                <td>${escapeHtml(ban.value)}</td>
+                <td>${escapeHtml(ban.type)}</td>
+                <td>${escapeHtml(ban.bannedBy)}</td>
+                <td>${bannedAt}</td>
+                <td>${escapeHtml(ban.reason || 'N/A')}</td>
+                <td>
+                    <button class="unban-btn" data-ban-value="${escapeHtml(ban.value)}">Unban</button>
+                </td>
+            `;
         });
         if (banCountSpan) banCountSpan.textContent = bans.length;
     }
@@ -229,6 +239,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     } else { console.error("[AdminJS] Could not attach listener to roomsTbody."); }
 
+    // Ban Actions
+    if (bansTbody) {
+        bansTbody.addEventListener('click', (event) => {
+            const target = event.target;
+            const banValue = target.dataset.banValue;
+            
+            if (target.classList.contains('unban-btn') && banValue) {
+                // Unban user implementation
+                if (confirm(`Are you sure you want to unban "${banValue}"?`)) {
+                    socket.emit('adminUnbanUser', { banValue: banValue });
+                }
+            }
+        });
+    } else { console.error("[AdminJS] Could not attach listener to bansTbody."); }
 
     // Search/Filter Listeners
     if (userSearch && usersTbody) {

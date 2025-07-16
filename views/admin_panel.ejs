@@ -31,6 +31,8 @@
         .unhide-btn:hover { background-color: #218838; }
         .download-link { background-color: #17a2b8; color: white; }
         .download-link:hover { background-color: #117a8b; }
+        .unban-btn { background-color: #28a745; color: white; }
+        .unban-btn:hover { background-color: #218838; }
         .flag-icon { width: 18px; height: auto; vertical-align: middle; margin-left: 5px; } /* Style for flags */
         .hidden-row { opacity: 0.6; font-style: italic; } /* Style for hidden rooms */
         
@@ -179,15 +181,36 @@
         <!-- Bans Section -->
         <section class="section">
             <h2>Current Bans (<span id="ban-count"><%= bans.length %></span>)</h2>
-            <!-- Add unban functionality if needed -->
-            <ul id="bans-list">
-                 <% bans.forEach(ban => { %>
-                    <li>
-                        <%= ban %>
-                        <!-- <button class="unban-btn" data-ban-value="<%= ban %>">Unban</button> -->
-                     </li>
-                 <% }); %>
-            </ul>
+            <% if (bans.length === 0) { %>
+                <p>No active bans.</p>
+            <% } else { %>
+                <table id="bans-table">
+                    <thead>
+                        <tr>
+                            <th>Value</th>
+                            <th>Type</th>
+                            <th>Banned By</th>
+                            <th>Banned At</th>
+                            <th>Reason</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bans-tbody">
+                        <% bans.forEach(ban => { %>
+                            <tr>
+                                <td><%= ban.value %></td>
+                                <td><%= ban.type %></td>
+                                <td><%= ban.bannedBy %></td>
+                                <td><%= new Date(ban.bannedAt).toLocaleString() %></td>
+                                <td><%= ban.reason || 'N/A' %></td>
+                                <td>
+                                    <button class="unban-btn" data-ban-value="<%= ban.value %>">Unban</button>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            <% } %>
         </section>
 
     </div>

@@ -350,7 +350,7 @@ async function getAdminData() {
             users: Array.from(room.users.values()).map(u => u.username) // List of usernames in the room
         }));
         
-        const bans = await operations.ban.getBannedValues();
+        const bans = await operations.ban.getAll();
         
         return { users: allUsers, rooms: allRooms, bans: bans };
     } catch (error) {
@@ -943,7 +943,11 @@ io.on('connection', (socket) => {
 
     // Notify admin panel about the new connection immediately
     if (io.sockets.adapter.rooms.has('admin_room')) {
-        io.to('admin_room').emit('adminUpdate', getAdminData());
+        getAdminData().then(adminData => {
+            io.to('admin_room').emit('adminUpdate', adminData);
+        }).catch(error => {
+            console.error('Error getting admin data for connection update:', error);
+        });
     }
 
     if (io.sockets.adapter.rooms.has('main_lobby')) {
@@ -1116,7 +1120,11 @@ io.on('connection', (socket) => {
 
         // Notify admin panel about user joining the room
          if (io.sockets.adapter.rooms.has('admin_room')) {
-            io.to('admin_room').emit('adminUpdate', getAdminData());
+            getAdminData().then(adminData => {
+                io.to('admin_room').emit('adminUpdate', adminData);
+            }).catch(error => {
+                console.error('Error getting admin data for join update:', error);
+            });
          }
 
         // This sends room info to the joining user
@@ -1287,7 +1295,11 @@ io.on('connection', (socket) => {
 
         // Notify admin panel if needed
         if (io.sockets.adapter.rooms.has('admin_room')) {
-            io.to('admin_room').emit('adminUpdate', getAdminData());
+            getAdminData().then(adminData => {
+                io.to('admin_room').emit('adminUpdate', adminData);
+            }).catch(error => {
+                console.error('Error getting admin data for settings update:', error);
+            });
         }
 
         // Notify users in the main lobby about the updated room
@@ -1326,8 +1338,8 @@ io.on('connection', (socket) => {
         if (!socket.isAdmin) return socket.emit('errorMsg', 'Permission denied.');
         const targetSocket = io.sockets.sockets.get(socketIdToKick);
         if (targetSocket && !targetSocket.isAdmin) { // Prevent kicking self or other admins
-            // console.log(`Admin ${socket.username} kicking user ${targetSocket.username} (${socketIdToKick})`);
-            targetSocket.emit('kicked', 'You have been kicked by an admin.');
+            console.log(`Admin ${socket.username} kicking user ${targetSocket.username} (${socketIdToKick})`);
+            targetSocket.emit('kicked', 'Kicked by Admin');
             targetSocket.disconnect(true); // Force disconnect
              // Update admin panel shortly after disconnect
              setTimeout(async () => {
@@ -1341,8 +1353,8 @@ io.on('connection', (socket) => {
                   }
              }, 500);
         } else {
-            //  console.warn(`Admin ${socket.username} failed kick: Target ${socketIdToKick} not found or is admin.`);
-             socket.emit('errorMsg', 'Cannot kick user (not found or is admin).');
+            console.warn(`Admin ${socket.username} failed kick: Target ${socketIdToKick} not found or is admin.`);
+            socket.emit('errorMsg', 'Cannot kick user (not found or is admin).');
         }
     });
 
@@ -1381,7 +1393,7 @@ io.on('connection', (socket) => {
                 }
 
                 if (changed) {
-                   targetSocket.emit('banned', `You have been banned (${bannedValue}).`);
+                   targetSocket.emit('banned', 'You were banned');
                    targetSocket.disconnect(true);
                     // Update admin panel shortly after disconnect
                      setTimeout(async () => {
@@ -1404,6 +1416,31 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('adminUnbanUser', async ({ banValue }) => {
+        if (!socket.isAdmin) return socket.emit('errorMsg', 'Permission denied.');
+        
+        try {
+            const existingBan = await operations.ban.findByValue(banValue);
+            
+            if (existingBan) {
+                await operations.ban.delete(banValue);
+                console.log(`Admin ${socket.username} unbanned: ${banValue} (type: ${existingBan.type})`);
+                
+                // Update admin panel
+                if (io.sockets.adapter.rooms.has('admin_room')) {
+                    const adminData = await getAdminData();
+                    io.to('admin_room').emit('adminUpdate', adminData);
+                }
+            } else {
+                console.log(`Admin ${socket.username} tried to unban non-existent ban: ${banValue}`);
+                socket.emit('errorMsg', 'Ban not found, cannot unban.');
+            }
+        } catch (error) {
+            console.error('Error unbanning user:', error);
+            socket.emit('errorMsg', 'Error unbanning user.');
+        }
+    });
+
     socket.on('adminDeleteRoom', async ({ roomIdToDelete }) => {
         if (!socket.isAdmin) return socket.emit('errorMsg', 'Permission denied.');
         
@@ -1415,7 +1452,7 @@ io.on('connection', (socket) => {
                 console.log(`Admin ${socket.username} deleting room '${roomName}' (${roomIdToDelete})`);
 
                 // Use io.to().emit() to notify users *before* disconnecting them
-                 io.to(roomIdToDelete).emit('roomDeleted', 'This room has been deleted by an admin.');
+                 io.to(roomIdToDelete).emit('roomDeleted', 'Room deleted by admin');
 
                 // Disconnect sockets associated with that room using io.in().disconnect()
                 io.in(roomIdToDelete).disconnectSockets(true); // true = close connection immediately

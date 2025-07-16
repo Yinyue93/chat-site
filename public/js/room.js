@@ -547,13 +547,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('kicked', (reason) => {
         console.warn(`[RoomJS] KICKED event fired. Reason: ${reason}`);
-        logMessage(`<div class="system-message" style="color:red;">You were kicked: ${escapeHtml(reason)}.</div>`);
+        logMessage(`<div class="system-message" style="color:red;">${escapeHtml(reason)}</div>`);
         if (messageInput) messageInput.disabled = true;
         if (sendButton) sendButton.disabled = true;
-        // Redirect? setTimeout(() => window.location.href = '/main', 3000);
+        // Redirect to main after 3 seconds
+        setTimeout(() => {
+            window.location.href = '/main';
+        }, 3000);
     });
-    socket.on('banned', (reason) => { /* similar handling */ });
-    socket.on('roomDeleted', (reason) => { /* similar handling */ });
+    
+    socket.on('banned', (reason) => {
+        console.warn(`[RoomJS] BANNED event fired. Reason: ${reason}`);
+        logMessage(`<div class="system-message" style="color:red;">${escapeHtml(reason)}</div>`);
+        if (messageInput) messageInput.disabled = true;
+        if (sendButton) sendButton.disabled = true;
+        // Redirect to login page after 3 seconds
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 3000);
+    });
+    
+    socket.on('roomDeleted', (reason) => {
+        console.warn(`[RoomJS] ROOM DELETED event fired. Reason: ${reason}`);
+        logMessage(`<div class="system-message" style="color:red;">${escapeHtml(reason)}</div>`);
+        if (messageInput) messageInput.disabled = true;
+        if (sendButton) sendButton.disabled = true;
+        // Redirect to main after 3 seconds
+        setTimeout(() => {
+            window.location.href = '/main';
+        }, 3000);
+    });
 
     // Handle redirect to main lobby after exit
     socket.on('redirectToMain', () => {
