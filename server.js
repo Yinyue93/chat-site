@@ -1060,7 +1060,7 @@ io.on('connection', (socket) => {
         
         if (isUsernameBanned || isIpBanned) {
             //  console.log(`Banned user ${socket.username} or IP ${ip} denied joining room ${roomId}`);
-             socket.emit('errorMsg', 'You are banned.');
+             socket.emit('banned', 'You are banned.');
              return socket.disconnect(true);
         }
 
