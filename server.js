@@ -163,8 +163,78 @@ const upload = multer({
 let rooms = {};
 // userSockets: Map<username, socketId> - For quick lookup (simplistic, assumes unique usernames)
 let userSockets = new Map();
+// roomDeletionTimers: Map<roomId, timeoutId> - Track pending room deletions
+let roomDeletionTimers = new Map();
 
 // ================== HELPER FUNCTIONS ==================
+
+// Helper function to schedule room deletion with grace period
+function scheduleRoomDeletion(roomId, gracePeriodMs = 10000) { // 10 seconds grace period
+    // Cancel any existing deletion timer for this room
+    if (roomDeletionTimers.has(roomId)) {
+        clearTimeout(roomDeletionTimers.get(roomId));
+        roomDeletionTimers.delete(roomId);
+    }
+    
+    // Schedule new deletion
+    const timeoutId = setTimeout(async () => {
+        try {
+            const room = rooms[roomId];
+            if (room && room.users.size === 0) {
+                console.log(`Deleting empty room after grace period: ${room.name} (${roomId})`);
+                
+                // Delete from MongoDB
+                await operations.room.delete(roomId);
+                
+                // Delete from memory
+                delete rooms[roomId];
+                
+                // Remove from deletion timers
+                roomDeletionTimers.delete(roomId);
+                
+                // Notify main lobby about room deletion
+                if (io.sockets.adapter.rooms.has('main_lobby')) {
+                    io.to('main_lobby').emit('roomDeleted', roomId);
+                    console.log(`Notified main lobby of room deletion: ${roomId}`);
+                    
+                    // Update room list
+                    getRoomInfoList().then(roomList => {
+                        io.to('main_lobby').emit('roomListUpdate', {
+                            rooms: roomList,
+                            connectedUsers: io.sockets.sockets.size
+                        });
+                    }).catch(error => {
+                        console.error('Error getting room list for room deletion:', error);
+                    });
+                }
+                
+                // Notify admin panel about room deletion
+                if (io.sockets.adapter.rooms.has('admin_room')) {
+                    getAdminData().then(adminData => {
+                        io.to('admin_room').emit('adminUpdate', adminData);
+                    }).catch(error => {
+                        console.error('Error getting admin data for room deletion:', error);
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error during scheduled room deletion:', error);
+        }
+    }, gracePeriodMs);
+    
+    // Store the timeout ID so we can cancel it later
+    roomDeletionTimers.set(roomId, timeoutId);
+    console.log(`Scheduled deletion of room ${roomId} in ${gracePeriodMs}ms`);
+}
+
+// Helper function to cancel scheduled room deletion
+function cancelRoomDeletion(roomId) {
+    if (roomDeletionTimers.has(roomId)) {
+        clearTimeout(roomDeletionTimers.get(roomId));
+        roomDeletionTimers.delete(roomId);
+        console.log(`Cancelled scheduled deletion of room ${roomId}`);
+    }
+}
 
 // Helper function to extract real IP address from request/socket
 function getRealIpAddress(req) {
@@ -925,39 +995,10 @@ io.on('connection', (socket) => {
                 io.to(prevRoomId).emit('userLeft', leaveLog);
                 io.to(prevRoomId).emit('updateUserList', Array.from(prevRoom.users.values()).map(u => u.username));
 
-                // Check if previous room became empty
+                // Check if previous room became empty and schedule deletion
                 if (prevRoom.users.size === 0) {
-                    console.log(`Deleting empty room after user left: ${prevRoom.name} (${prevRoomId})`);
-                    
-                    // Delete from MongoDB
-                    operations.room.delete(prevRoomId).catch(error => {
-                        console.error('Error deleting empty room from database:', error);
-                    });
-                    
-                    // Delete from memory
-                    delete rooms[prevRoomId];
-                    
-                    // Notify admin panel about room deletion
-                    if (io.sockets.adapter.rooms.has('admin_room')) {
-                        getAdminData().then(adminData => {
-                            io.to('admin_room').emit('adminUpdate', adminData);
-                        }).catch(error => {
-                            console.error('Error getting admin data for room deletion:', error);
-                        });
-                    }
-                    
-                    // Notify main lobby about room deletion
-                    if (io.sockets.adapter.rooms.has('main_lobby')) {
-                        io.to('main_lobby').emit('roomDeleted', prevRoomId);
-                        getRoomInfoList().then(roomList => {
-                            io.to('main_lobby').emit('roomListUpdate', {
-                                rooms: roomList,
-                                connectedUsers: io.sockets.sockets.size
-                            });
-                        }).catch(error => {
-                            console.error('Error getting room list for room deletion:', error);
-                        });
-                    }
+                    console.log(`Previous room ${prevRoom.name} (${prevRoomId}) is now empty, scheduling deletion with grace period`);
+                    scheduleRoomDeletion(prevRoomId);
                 }
             }
         }
@@ -972,6 +1013,9 @@ io.on('connection', (socket) => {
         socket.currentRoom = roomId;
         room.users.set(socket.id, { username: socket.username, isAdmin: socket.isAdmin }); // Add user to room map
         userSockets.set(socket.username, socket.id); // Update lookup map (might overwrite if user has multiple tabs)
+        
+        // Cancel any scheduled deletion for this room since it's no longer empty
+        cancelRoomDeletion(roomId);
 
         // console.log(`${socket.username} ${socket.isAdmin ? '(Admin)' : ''} successfully joined room: ${room.name} (${roomId})`);
 
@@ -1389,43 +1433,10 @@ io.on('connection', (socket) => {
                 io.to(roomId).emit('userLeft', leaveMsg);
                 io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
 
-                // Check if room is now empty and delete if necessary
+                // Check if room is now empty and schedule deletion with grace period
                 if (room.users.size === 0) {
-                    console.log(`Deleting empty room after last user disconnected: ${room.name} (${roomId})`);
-                    
-                    // Delete from MongoDB
-                    operations.room.delete(roomId).catch(error => {
-                        console.error('Error deleting empty room from database:', error);
-                    });
-                    
-                    // Delete from memory
-                    delete rooms[roomId];
-
-                    // Notify main lobby about room deletion
-                    if (io.sockets.adapter.rooms.has('main_lobby')) {
-                        io.to('main_lobby').emit('roomDeleted', roomId); // Send ID of deleted room
-                        console.log(`Notified main lobby of room deletion: ${roomId}`);
-                        
-                        // Update room list
-                        getRoomInfoList().then(roomList => {
-                            io.to('main_lobby').emit('roomListUpdate', {
-                                rooms: roomList,
-                                connectedUsers: io.sockets.sockets.size
-                            });
-                        }).catch(error => {
-                            console.error('Error getting room list for room deletion:', error);
-                        });
-                    }
-                    
-                    // Notify admin panel about room deletion
-                    if (io.sockets.adapter.rooms.has('admin_room')) {
-                        getAdminData().then(adminData => {
-                            io.to('admin_room').emit('adminUpdate', adminData);
-                        }).catch(error => {
-                            console.error('Error getting admin data for room deletion:', error);
-                        });
-                    }
-
+                    console.log(`Room ${room.name} (${roomId}) is now empty, scheduling deletion with grace period`);
+                    scheduleRoomDeletion(roomId);
                 } else {
                      // If room not deleted, update user count in main lobby
                      if (io.sockets.adapter.rooms.has('main_lobby')) {
