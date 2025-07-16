@@ -915,8 +915,14 @@ app.get('/admin/download-log/:roomId', requireAdmin, async (req, res) => {
 });
 
 // Admin Action: Get Banned IPs/Usernames
-app.get('/admin/bans', requireAdmin, (req, res) => {
-    // ... existing code ...
+app.get('/admin/bans', requireAdmin, async (req, res) => {
+    try {
+        const bans = await operations.ban.getAll();
+        res.json({ success: true, bans: bans });
+    } catch (error) {
+        console.error('Error getting bans:', error);
+        res.status(500).json({ success: false, message: 'Error retrieving bans' });
+    }
 });
 
 
