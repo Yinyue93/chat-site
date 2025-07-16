@@ -1367,16 +1367,23 @@ io.on('connection', (socket) => {
             }
             
             targetSocket.emit('kicked', 'Kicked by Admin');
-            targetSocket.disconnect(true); // Force disconnect
-             // Update admin panel immediately
-             if (io.sockets.adapter.rooms.has('admin_room')) {
-                 try {
-                     const adminData = await getAdminData();
-                     io.to('admin_room').emit('adminUpdate', adminData);
-                 } catch (error) {
-                     console.error('Error getting admin data for kick update:', error);
+            // Mark socket as kicked to prevent disconnect handler from updating admin panel
+            targetSocket.isKicked = true;
+            // Add a small delay before disconnecting to ensure the kicked event is processed
+            setTimeout(() => {
+                targetSocket.disconnect(true);
+            }, 50);
+             // Update admin panel after a delay to ensure socket is fully disconnected
+             setTimeout(async () => {
+                 if (io.sockets.adapter.rooms.has('admin_room')) {
+                     try {
+                         const adminData = await getAdminData();
+                         io.to('admin_room').emit('adminUpdate', adminData);
+                     } catch (error) {
+                         console.error('Error getting admin data for kick update:', error);
+                     }
                  }
-             }
+             }, 500);
         } else {
             console.warn(`Admin ${socket.username} failed kick: Target ${socketIdToKick} not found or is admin.`);
             socket.emit('errorMsg', 'Cannot kick user (not found or is admin).');
@@ -1438,8 +1445,13 @@ io.on('connection', (socket) => {
                }
                
                targetSocket.emit('banned', 'You were banned');
-               targetSocket.disconnect(true);
-                // Update admin panel after a small delay to ensure socket is fully disconnected
+               // Mark socket as banned to prevent disconnect handler from updating admin panel
+               targetSocket.isBanned = true;
+               // Add a small delay before disconnecting to ensure the banned event is processed
+               setTimeout(() => {
+                   targetSocket.disconnect(true);
+               }, 50);
+                // Update admin panel after a longer delay to ensure socket is fully disconnected
                 setTimeout(async () => {
                     if (io.sockets.adapter.rooms.has('admin_room')) {
                         try {
@@ -1449,7 +1461,7 @@ io.on('connection', (socket) => {
                             console.error('Error getting admin data after ban:', error);
                         }
                     }
-                }, 100);
+                }, 500);
             } else {
                     console.log(`Admin ${socket.username} ban attempt resulted in no change for ${username}`);
                     socket.emit('errorMsg', 'User/IP already banned or no option selected.');
@@ -1688,8 +1700,8 @@ io.on('connection', (socket) => {
             }
         }
 
-        // Notify admin panel about the disconnection
-        if (io.sockets.adapter.rooms.has('admin_room')) {
+        // Notify admin panel about the disconnection (skip if user was banned or kicked)
+        if (io.sockets.adapter.rooms.has('admin_room') && !socket.isBanned && !socket.isKicked) {
            // Use a small delay to ensure disconnect processing completes before update
            setTimeout(async () => {
                 try {
