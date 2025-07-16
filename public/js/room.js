@@ -336,7 +336,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 chatLog.appendChild(div);
             }
             
-            if (wasScrolledToBottom) {
+            // Check if the message contains images
+            const images = div.querySelectorAll('img');
+            
+            if (images.length > 0 && wasScrolledToBottom) {
+                // Wait for all images to load before scrolling
+                let loadedImages = 0;
+                const totalImages = images.length;
+                
+                const onImageLoad = () => {
+                    loadedImages++;
+                    if (loadedImages === totalImages) {
+                        // All images loaded, now scroll to bottom
+                        chatLog.scrollTop = chatLog.scrollHeight;
+                    }
+                };
+                
+                images.forEach(img => {
+                    if (img.complete) {
+                        // Image already loaded
+                        onImageLoad();
+                    } else {
+                        // Wait for image to load
+                        img.onload = onImageLoad;
+                        img.onerror = onImageLoad; // Handle errors too
+                    }
+                });
+            } else if (wasScrolledToBottom) {
+                // No images, scroll immediately
                 chatLog.scrollTop = chatLog.scrollHeight;
             }
         } catch (e) {
