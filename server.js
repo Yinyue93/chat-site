@@ -43,8 +43,8 @@ async function loadRoomsFromDatabase() {
                     createdAt: dbRoom.createdAt
                 };
                 
-                // Load recent messages from MongoDB
-                const recentMessages = await operations.message.getRecentByRoom(dbRoom.roomId);
+                // Load recent messages from MongoDB (increased limit for better persistence)
+                const recentMessages = await operations.message.getRecentByRoom(dbRoom.roomId, 100);
                 rooms[dbRoom.roomId].logs = recentMessages.map(msg => ({
                     type: msg.type,
                     username: msg.username,
@@ -275,7 +275,7 @@ async function addLog(roomId, logEntry) {
             rooms[roomId].logs.push(logEntry);
             
             // Limit in-memory log size to prevent memory issues
-            if (rooms[roomId].logs.length > 150) { // Keep last 150 entries
+            if (rooms[roomId].logs.length > 200) { // Keep last 200 entries (increased for better persistence)
                 rooms[roomId].logs.shift();
             }
         } else {
@@ -525,8 +525,8 @@ app.get('/room/:roomId', requireLogin, async (req, res) => {
                 createdAt: dbRoom.createdAt
             };
             
-            // Load recent messages from MongoDB
-            const recentMessages = await operations.message.getRecentByRoom(roomId);
+            // Load recent messages from MongoDB (increased limit for better persistence)
+            const recentMessages = await operations.message.getRecentByRoom(roomId, 100);
             rooms[roomId].logs = recentMessages.map(msg => ({
                 type: msg.type,
                 username: msg.username,
@@ -841,13 +841,48 @@ io.on('connection', (socket) => {
     socket.on('joinRoom', async ({ roomId }) => {
         if (!socket.username) return; // Should not happen due to check above
 
-        const room = rooms[roomId];
         const currentSession = socket.request.session; // Re-access session for latest data
 
-        // 1. Check if room exists
+        // 1. Check if room exists in memory, if not check database
+        let room = rooms[roomId];
         if (!room) {
-            // console.warn(`User ${socket.username} failed to join non-existent room: ${roomId}`);
-            return socket.emit('errorMsg', 'Room does not exist anymore.');
+            try {
+                // Check if room exists in MongoDB
+                const dbRoom = await operations.room.findById(roomId);
+                if (!dbRoom) {
+                    console.warn(`User ${socket.username} failed to join non-existent room: ${roomId}`);
+                    return socket.emit('errorMsg', 'Room does not exist anymore.');
+                }
+
+                // Create in-memory room structure if it doesn't exist
+                rooms[roomId] = {
+                    name: dbRoom.name,
+                    maxUsers: dbRoom.maxUsers,
+                    password: dbRoom.password,
+                    users: new Map(),
+                    logs: [],
+                    isHidden: dbRoom.isHidden,
+                    createdBy: dbRoom.createdBy,
+                    createdAt: dbRoom.createdAt
+                };
+                
+                // Load recent messages from MongoDB (increased limit for better persistence)
+                const recentMessages = await operations.message.getRecentByRoom(roomId, 100);
+                rooms[roomId].logs = recentMessages.map(msg => ({
+                    type: msg.type,
+                    username: msg.username,
+                    isAdmin: msg.isAdmin,
+                    message: msg.message,
+                    url: msg.imageUrl,
+                    timestamp: msg.timestamp.getTime()
+                }));
+                
+                room = rooms[roomId];
+                console.log(`Room ${roomId} recreated in memory with ${room.logs.length} messages loaded`);
+            } catch (error) {
+                console.error('Error loading room from database:', error);
+                return socket.emit('errorMsg', 'Failed to load room data.');
+            }
         }
 
         // 2. Check password (admins bypass)
