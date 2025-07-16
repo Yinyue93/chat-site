@@ -1586,10 +1586,8 @@ io.on('connection', (socket) => {
 
                 // console.log(`${userInfo.username} left room: ${room.name} due to disconnect.`);
 
-                // Log and notify room (leave message will be suppressed if user quickly reconnects)
-                const leaveMsg = { type: 'leave', username: userInfo.username, isAdmin: userInfo.isAdmin, timestamp: Date.now() };
-                addLog(roomId, leaveMsg);
-                io.to(roomId).emit('userLeft', leaveMsg);
+                // Do NOT emit userLeft message for disconnections - only for explicit exits
+                // Only update the user list silently
                 io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
 
                 // Check if room is now empty and schedule deletion with grace period
