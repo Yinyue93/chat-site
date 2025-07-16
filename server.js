@@ -1439,11 +1439,17 @@ io.on('connection', (socket) => {
                
                targetSocket.emit('banned', 'You were banned');
                targetSocket.disconnect(true);
-                // Update admin panel immediately
-                if (io.sockets.adapter.rooms.has('admin_room')) {
-                    const adminData = await getAdminData();
-                    io.to('admin_room').emit('adminUpdate', adminData);
-                }
+                // Update admin panel after a small delay to ensure socket is fully disconnected
+                setTimeout(async () => {
+                    if (io.sockets.adapter.rooms.has('admin_room')) {
+                        try {
+                            const adminData = await getAdminData();
+                            io.to('admin_room').emit('adminUpdate', adminData);
+                        } catch (error) {
+                            console.error('Error getting admin data after ban:', error);
+                        }
+                    }
+                }, 100);
             } else {
                     console.log(`Admin ${socket.username} ban attempt resulted in no change for ${username}`);
                     socket.emit('errorMsg', 'User/IP already banned or no option selected.');

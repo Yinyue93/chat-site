@@ -233,4 +233,11 @@ document.addEventListener('DOMContentLoaded', () => {
             userCount.textContent = '!';
         }
     });
+
+    socket.on('banned', (reason) => {
+        console.warn(`[MainJS] BANNED event fired. Reason: ${reason}`);
+        alert(`You were banned: ${reason}`);
+        // Redirect to login page immediately
+        window.location.href = '/';
+    });
 });
