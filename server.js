@@ -801,6 +801,7 @@ io.on('connection', (socket) => {
     socket.username = session?.username;
     socket.isAdmin = session?.isAdmin || false;
     socket.currentRoom = null; // Track which room the socket is currently in
+    socket.isTransitioning = false; // Clear any transitioning flag
 
     if (!socket.username) {
         // This might happen if session expired or wasn't established correctly
@@ -843,6 +844,9 @@ io.on('connection', (socket) => {
          if (!socket.rooms.has('main_lobby')) {
              socket.join('main_lobby');
          }
+         
+         // Clear transitioning flag since user is now in main lobby
+         socket.isTransitioning = false;
 
          // Send current room list
          try {
@@ -946,6 +950,7 @@ io.on('connection', (socket) => {
         // --- Join the new room ---
         socket.join(roomId);
         socket.currentRoom = roomId;
+        socket.isTransitioning = false; // Clear transitioning flag since user is now in a room
         room.users.set(socket.id, { username: socket.username, isAdmin: socket.isAdmin }); // Add user to room map
         userSockets.set(socket.username, socket.id); // Update lookup map (might overwrite if user has multiple tabs)
 
@@ -1461,6 +1466,9 @@ io.on('connection', (socket) => {
         // Join user to main lobby immediately to prevent user count drop
         socket.join('main_lobby');
         
+        // Mark user as transitioning to prevent user count drop during redirect
+        socket.isTransitioning = true;
+        
         // Send current room list and user count to this user
         try {
             const roomList = await getRoomInfoList();
@@ -1554,7 +1562,8 @@ io.on('connection', (socket) => {
         }
 
          // Update total user count for main lobby (if anyone is there)
-        if (io.sockets.adapter.rooms.has('main_lobby')) {
+         // Skip user count update if user is transitioning from room to main lobby
+        if (io.sockets.adapter.rooms.has('main_lobby') && !socket.isTransitioning) {
             const connectedUsers = io.sockets.sockets.size;
             io.to('main_lobby').emit('userCountUpdate', connectedUsers);
             

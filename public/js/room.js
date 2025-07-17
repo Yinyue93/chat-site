@@ -397,14 +397,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('disconnect', (reason) => {
         console.warn(`[RoomJS] DISCONNECT event fired. Reason: ${reason}`);
-        logMessage(`<div class="system-message" style="color:orange;">Disconnected: ${reason}. Reconnecting...</div>`);
         if (messageInput) messageInput.disabled = true;
         if (sendButton) sendButton.disabled = true;
     });
 
     socket.on('connect_error', (err) => {
         console.error(`[RoomJS] CONNECT_ERROR event fired. Message: ${err.message}`);
-        logMessage(`<div class="system-message" style="color:red;">Connection Error: ${escapeHtml(err.message)}</div>`);
         if (messageInput) messageInput.disabled = true;
         if (sendButton) sendButton.disabled = true;
     });
@@ -572,7 +570,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('errorMsg', (message) => {
         console.error(`[RoomJS] ERRORMSG event fired. Message: ${message}`);
-        logMessage(`<div class="system-message" style="color:red;">Server Error: ${escapeHtml(message)}</div>`);
     });
 
     socket.on('kicked', (reason) => {
