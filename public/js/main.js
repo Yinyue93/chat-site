@@ -94,10 +94,15 @@ document.addEventListener('DOMContentLoaded', () => {
             li.appendChild(infoDiv);
             
             // Create join button
-            let joinButton = document.createElement('a');
-            joinButton.href = `/room/${room.id}`;
+            let joinButton = document.createElement('button');
             joinButton.className = 'join-button';
             joinButton.textContent = 'Join';
+            joinButton.addEventListener('click', () => {
+                // Emit socket event to join room from lobby
+                socket.emit('joinRoom', { roomId: room.id, fromLobby: true });
+                // Navigate to room page
+                window.location.href = `/room/${room.id}`;
+            });
             li.appendChild(joinButton);
             
             // Add the complete list item to the list
@@ -240,4 +245,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Redirect to login page immediately
         window.location.href = '/';
     });
+
+    // Make joinRoom function globally accessible for template onclick handlers
+    window.joinRoom = function(roomId) {
+        // Emit socket event to join room from lobby
+        socket.emit('joinRoom', { roomId: roomId, fromLobby: true });
+        // Navigate to room page
+        window.location.href = `/room/${roomId}`;
+    };
 });

@@ -392,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('connect', () => {
         logMessage(`<div class="system-message" style="color:green;">Connected! Joining room...</div>`);
-        socket.emit('joinRoom', { roomId });
+        socket.emit('joinRoom', { roomId }); // fromLobby defaults to false
     });
 
     socket.on('disconnect', (reason) => {
@@ -612,7 +612,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle redirect to main lobby after exit
     socket.on('redirectToMain', () => {
-        console.log('[RoomJS] Redirecting to main lobby after exit');
         window.location.href = '/main';
     });
 
@@ -1008,7 +1007,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Exit Room Button Handler ---
     if (exitButton) {
         exitButton.addEventListener('click', () => {
-            console.log('[RoomJS] User explicitly exiting room');
             socket.emit('exitRoom');
         });
     }

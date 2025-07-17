@@ -109,7 +109,7 @@ const messageSchema = new mongoose.Schema({
     type: {
         type: String,
         required: true,
-        enum: ['message', 'image', 'join', 'leave', 'system'],
+        enum: ['message', 'image', 'join', 'leave', 'system', 'ban', 'kick'],
         default: 'message'
     },
     username: {

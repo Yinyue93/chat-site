@@ -24,7 +24,7 @@
         .room-list a { text-decoration: none; color: #007bff; font-weight: bold; }
         .room-list .details { color: #555; font-size: 0.9em; }
         .room-list .password-icon { margin-left: 10px; color: #ffc107; } /* Style for password indicator */
-        .room-list .join-button { padding: 5px 10px; background-color: #28a745; color: white; border-radius: 3px; text-decoration: none; font-size: 0.9em; }
+        .room-list .join-button { padding: 5px 10px; background-color: #28a745; color: white; border-radius: 3px; text-decoration: none; font-size: 0.9em; border: none; cursor: pointer; }
         .room-list .join-button:hover { background-color: #218838; }
 
         .create-room-form { background-color: #f9f9f9; padding: 20px; border: 1px solid #ccc; border-radius: 5px; margin-top: 30px; }
@@ -93,7 +93,7 @@
                                         <span class="password-icon" title="Password protected">🔒</span>
                                     <% } %>
                                 </div>
-                                <a href="/room/<%= room.id %>" class="join-button">Join</a>
+                                <button class="join-button" onclick="joinRoom('<%= room.id %>')">Join</button>
                             </li>
                         <% }); %>
                     </ul>

@@ -55,7 +55,7 @@ async function loadRoomsFromDatabase() {
                 }));
             }
         }
-        console.log(`Loaded ${dbRooms.length} rooms from database`);
+
     } catch (error) {
         console.error('Error loading rooms from database:', error);
     }
@@ -183,7 +183,7 @@ function scheduleRoomDeletion(roomId, gracePeriodMs = 10000) { // 10 seconds gra
         try {
             const room = rooms[roomId];
             if (room && room.users.size === 0) {
-                console.log(`Deleting empty room after grace period: ${room.name} (${roomId})`);
+
                 
                 // Delete from MongoDB
                 await operations.room.delete(roomId);
@@ -197,7 +197,6 @@ function scheduleRoomDeletion(roomId, gracePeriodMs = 10000) { // 10 seconds gra
                 // Notify main lobby about room deletion
                 if (io.sockets.adapter.rooms.has('main_lobby')) {
                     io.to('main_lobby').emit('roomDeleted', roomId);
-                    console.log(`Notified main lobby of room deletion: ${roomId}`);
                     
                     // Update room list
                     getRoomInfoList().then(roomList => {
@@ -226,7 +225,6 @@ function scheduleRoomDeletion(roomId, gracePeriodMs = 10000) { // 10 seconds gra
     
     // Store the timeout ID so we can cancel it later
     roomDeletionTimers.set(roomId, timeoutId);
-    console.log(`Scheduled deletion of room ${roomId} in ${gracePeriodMs}ms`);
 }
 
 // Helper function to cancel scheduled room deletion
@@ -234,7 +232,6 @@ function cancelRoomDeletion(roomId) {
     if (roomDeletionTimers.has(roomId)) {
         clearTimeout(roomDeletionTimers.get(roomId));
         roomDeletionTimers.delete(roomId);
-        console.log(`Cancelled scheduled deletion of room ${roomId}`);
     }
 }
 
@@ -412,7 +409,7 @@ async function removeRecentLeaveMessage(roomId, username) {
                     
                     // Remove from memory
                     recentLogs.splice(i, 1);
-                    console.log(`Removed recent leave message for ${username} in room ${roomId}`);
+
                     break;
                 }
             }
@@ -576,13 +573,13 @@ app.post('/create-room', requireLogin, async (req, res) => {
 
     if (!roomName || roomName.length < 3 || roomName.length > 30) {
         // TODO: Add flash error message back to /main
-        console.log(`Room creation failed: Invalid name '${roomName}' by ${creator}`);
+
         return res.redirect('/main');
     }
     const max = parseInt(maxUsers, 10);
     if (isNaN(max) || max < 1 || max > 100) { // Set reasonable limits
          // TODO: Add flash error message back to /main
-        console.log(`Room creation failed: Invalid max users '${maxUsers}' by ${creator}`);
+        
         return res.redirect('/main');
     }
 
@@ -593,7 +590,7 @@ app.post('/create-room', requireLogin, async (req, res) => {
         let hashedPassword = null;
         if (password && password.trim()) {
             hashedPassword = await hashPassword(password.trim());
-            console.log(`Password set and hashed for room '${roomName}' by ${creator}`);
+
         }
         
         // Create room in MongoDB
@@ -618,12 +615,12 @@ app.post('/create-room', requireLogin, async (req, res) => {
             createdAt: Date.now()
         };
         
-        console.log(`Room created: '${roomName}' (${roomId}) by ${creator}`);    
+
         
         // Grant access to the creator if a password was set
         if (hashedPassword) {
             req.session[`room_${roomId}_access`] = true; // Grant access for this session
-            console.log(`Granted automatic access to room creator ${creator} for room ${roomId}`);
+
             // Ensure session is saved before redirect
             req.session.save(err => {
                 if (err) console.error("Session save error while granting room access:", err);
@@ -653,7 +650,7 @@ app.get('/room/:roomId', requireLogin, async (req, res) => {
         // Check if room exists in MongoDB
         const dbRoom = await operations.room.findById(roomId);
         if (!dbRoom) {
-            console.log(`User ${session.username} tried to access non-existent room: ${roomId}`);
+
             // TODO: Add flash message 'Room not found'
             return res.redirect('/main');
         }
@@ -720,11 +717,10 @@ app.post('/room/:roomId/password', requireLogin, async (req, res) => {
              session[`room_${roomId}_access`] = true; // Grant access for this session
              session.save(err => { // Save session before redirect
                  if (err) console.error("Session save error on password grant:", err);
-                 console.log(`User ${session.username} granted access to room ${roomId}`);
+
                  res.redirect(`/room/${roomId}`);
              });
          } else {
-             console.log(`User ${session.username} failed password attempt for room ${roomId}`);
              res.render('password_prompt', { roomId: roomId, roomName: dbRoom.name, error: 'Incorrect password' });
          }
      } catch (error) {
@@ -994,7 +990,7 @@ io.on('connection', (socket) => {
     });
 
     // --- Handle Room Joining ---
-    socket.on('joinRoom', async ({ roomId }) => {
+    socket.on('joinRoom', async ({ roomId, fromLobby = false }) => {
         if (!socket.username) return; // Should not happen due to check above
 
         const currentSession = socket.request.session; // Re-access session for latest data
@@ -1034,7 +1030,6 @@ io.on('connection', (socket) => {
                 }));
                 
                 room = rooms[roomId];
-                console.log(`Room ${roomId} recreated in memory with ${room.logs.length} messages loaded`);
             } catch (error) {
                 console.error('Error loading room from database:', error);
                 return socket.emit('errorMsg', 'Failed to load room data.');
@@ -1064,6 +1059,8 @@ io.on('connection', (socket) => {
              return socket.disconnect(true);
         }
 
+        // fromLobby parameter indicates if this is a join from the main lobby join button
+
         // --- Leave previous room if necessary ---
         if (socket.currentRoom && socket.currentRoom !== roomId && rooms[socket.currentRoom]) {
             const prevRoomId = socket.currentRoom;
@@ -1083,7 +1080,6 @@ io.on('connection', (socket) => {
 
                 // Check if previous room became empty and schedule deletion
                 if (prevRoom.users.size === 0) {
-                    console.log(`Previous room ${prevRoom.name} (${prevRoomId}) is now empty, scheduling deletion with grace period`);
                     scheduleRoomDeletion(prevRoomId);
                 }
             }
@@ -1111,12 +1107,12 @@ io.on('connection', (socket) => {
         // Send recent chat history (logs) to the joining user, include reconnection info
         socket.emit('loadLogs', room.logs, { isQuickReconnect: isQuickReconnect });
 
-        // Notify everyone in the room about the new user (suppress for quick reconnections)
-        if (!isQuickReconnect) {
+        // Notify everyone in the room about the new user (only when joining from main lobby via Join button)
+        if (fromLobby && !isQuickReconnect) {
             const joinMsg = { type: 'join', username: socket.username, isAdmin: socket.isAdmin, timestamp: Date.now() };
             addLog(roomId, joinMsg);
             io.to(roomId).emit('userJoined', joinMsg); // Send specific join message
-        } else {
+        } else if (isQuickReconnect) {
             // Remove the recent leave message for quick reconnections
             await removeRecentLeaveMessage(roomId, socket.username);
         }
@@ -1269,8 +1265,6 @@ io.on('connection', (socket) => {
             room.name = roomName;
             room.maxUsers = max;
 
-            console.log(`Room ${roomId} updated: Name changed from "${oldName}" to "${roomName}", Max users set to ${max}`);
-
             // Add a system log entry
             await addLog(roomId, {
                 type: 'system',
@@ -1345,7 +1339,6 @@ io.on('connection', (socket) => {
         const targetSocket = io.sockets.sockets.get(socketIdToKick);
         if (targetSocket && !targetSocket.isAdmin) { // Prevent kicking self or other admins
             const username = targetSocket.username;
-            console.log(`Admin ${socket.username} kicking user ${username} (${socketIdToKick})`);
             
             // Check if the kicked user is in a room and notify other users
             if (targetSocket.currentRoom && rooms[targetSocket.currentRoom]) {
@@ -1408,7 +1401,7 @@ io.on('connection', (socket) => {
                         bannedBy: socket.username,
                         reason: 'Admin ban'
                     });
-                    console.log(`Admin ${socket.username} banning username: ${username}`);
+
                     bannedValue = username;
                     changed = true;
                 }
@@ -1419,7 +1412,7 @@ io.on('connection', (socket) => {
                         bannedBy: socket.username,
                         reason: 'Admin ban'
                     });
-                    console.log(`Admin ${socket.username} banning IP: ${ip}`);
+
                     bannedValue = ip; // IP takes precedence for message if both banned
                     changed = true;
                 }
@@ -1473,7 +1466,6 @@ io.on('connection', (socket) => {
                     }
                 }, 500);
             } else {
-                    console.log(`Admin ${socket.username} ban attempt resulted in no change for ${username}`);
                     socket.emit('errorMsg', 'User/IP already banned or no option selected.');
                 }
             } catch (error) {
@@ -1494,7 +1486,7 @@ io.on('connection', (socket) => {
             
             if (existingBan) {
                 await operations.ban.delete(banValue);
-                console.log(`Admin ${socket.username} unbanned: ${banValue} (type: ${existingBan.type})`);
+
                 
                 // Update admin panel
                 if (io.sockets.adapter.rooms.has('admin_room')) {
@@ -1502,7 +1494,6 @@ io.on('connection', (socket) => {
                     io.to('admin_room').emit('adminUpdate', adminData);
                 }
             } else {
-                console.log(`Admin ${socket.username} tried to unban non-existent ban: ${banValue}`);
                 socket.emit('errorMsg', 'Ban not found, cannot unban.');
             }
         } catch (error) {
@@ -1519,7 +1510,6 @@ io.on('connection', (socket) => {
 
             if (roomToDelete) {
                 const roomName = roomToDelete.name;
-                console.log(`Admin ${socket.username} deleting room '${roomName}' (${roomIdToDelete})`);
 
                 // Use io.to().emit() to notify users *before* disconnecting them
                  io.to(roomIdToDelete).emit('roomDeleted', 'Room deleted by admin');
@@ -1530,23 +1520,21 @@ io.on('connection', (socket) => {
                 // Delete the room from MongoDB and in-memory structure
                 await operations.room.delete(roomIdToDelete);
                 delete rooms[roomIdToDelete];
-                console.log(`Room deleted from database and memory: ${roomIdToDelete}`);
 
                 // Notify main lobby about room deletion
                 if (io.sockets.adapter.rooms.has('main_lobby')) {
                     io.to('main_lobby').emit('roomDeleted', roomIdToDelete); // Send ID of deleted room
-                    console.log(`Notified main lobby of room deletion: ${roomIdToDelete}`);
                 }
 
                 // Update admin panel
                 if (io.sockets.adapter.rooms.has('admin_room')) {
-                    console.log(' > Emitting adminUpdate after room deletion');
+
                     const adminData = await getAdminData();
                     io.to('admin_room').emit('adminUpdate', adminData);
                 }
 
             } else {
-                console.log(`Admin ${socket.username} tried to delete non-existent room: ${roomIdToDelete}`);
+
                 socket.emit('errorMsg', 'Room not found, cannot delete.');
             }
         } catch (error) {
@@ -1572,7 +1560,6 @@ io.on('connection', (socket) => {
                 }
                 
                 const status = newHiddenStatus ? 'hidden' : 'visible';
-                console.log(`Admin ${socket.username} toggled room ${roomIdToToggle} to ${status}`);
         
                 // Notify main lobby with a FULL room list update
                 if (io.sockets.adapter.rooms.has('main_lobby')) {
@@ -1615,7 +1602,6 @@ io.on('connection', (socket) => {
         }
 
         const userInfo = room.users.get(socket.id);
-        console.log(`User ${socket.username} explicitly exiting room ${room.name} (${roomId})`);
 
         // Remove user from room
         room.users.delete(socket.id);
@@ -1630,7 +1616,6 @@ io.on('connection', (socket) => {
 
         // If room is now empty, delete it immediately (no grace period for explicit exits)
         if (room.users.size === 0) {
-            console.log(`Immediately deleting room after explicit exit: ${room.name} (${roomId})`);
             
             // Cancel any pending delayed deletion
             cancelRoomDeletion(roomId);
@@ -1645,7 +1630,6 @@ io.on('connection', (socket) => {
                 // Notify main lobby about room deletion
                 if (io.sockets.adapter.rooms.has('main_lobby')) {
                     io.to('main_lobby').emit('roomDeleted', roomId);
-                    console.log(`Notified main lobby of room deletion: ${roomId}`);
                     
                     // Update room list
                     const roomList = await getRoomInfoList();
@@ -1699,7 +1683,6 @@ io.on('connection', (socket) => {
 
                 // Check if room is now empty and schedule deletion with grace period
                 if (room.users.size === 0) {
-                    console.log(`Room ${room.name} (${roomId}) is now empty, scheduling deletion with grace period`);
                     scheduleRoomDeletion(roomId);
                 } else {
                      // If room not deleted, update user count in main lobby
