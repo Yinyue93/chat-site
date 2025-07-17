@@ -145,38 +145,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Helper: Update User Count With Animation ---
-    function updateUserCountWithAnimation(count) {
+    // --- Helper: Update User Count ---
+    function updateUserCount(count) {
         if (!userCount) return;
         
-        // Add a brief highlight animation
-        userCount.style.transition = 'background-color 0.5s ease';
-        userCount.style.backgroundColor = '#ffff99'; // Subtle yellow highlight
-        
-        // Update the text
+        // Update the text without animation
         userCount.textContent = count;
-        
-        // Remove the highlight after a delay
-        setTimeout(() => {
-            userCount.style.backgroundColor = 'transparent';
-        }, 1000);
     }
 
     // --- Socket Event Listeners ---
     socket.on('connect', () => {
+        // Clear any loading state
+        if (userCount) {
+            userCount.classList.remove('loading-data');
+            userCount.style.color = '';
+        }
         socket.emit('joinMainLobby');
     });
 
     socket.on('roomListUpdate', (data) => {
         updateRoomList(data.rooms);
         if (userCount && typeof data.connectedUsers === 'number') {
-            updateUserCountWithAnimation(data.connectedUsers);
+            updateUserCount(data.connectedUsers);
         }
     });
 
-    // Enhanced userCountUpdate handler with animation
+    // UserCountUpdate handler
     socket.on('userCountUpdate', (count) => {
-        updateUserCountWithAnimation(count);
+        updateUserCount(count);
     });
 
     // New event listener for single room updates
@@ -220,11 +216,18 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('disconnect', (reason) => {
         console.warn(`[MainJS] Disconnected. Reason: ${reason}`);
         
-        // Visually indicate disconnection to user
-        if (userCount) {
-            userCount.classList.add('loading-data');
-            userCount.style.color = '#999';
-            userCount.textContent = '...';
+        // Only show loading indicator for unexpected disconnections
+        // Skip showing "..." for intentional navigation (client namespace disconnect)
+        if (reason !== 'client namespace disconnect' && userCount) {
+            // Add a brief delay to prevent flashing during quick reconnections
+            setTimeout(() => {
+                // Only show if still disconnected after delay
+                if (socket.disconnected && userCount) {
+                    userCount.classList.add('loading-data');
+                    userCount.style.color = '#999';
+                    userCount.textContent = '...';
+                }
+            }, 1000); // 1 second delay
         }
     });
 

@@ -476,6 +476,18 @@ app.post('/create-room', requireLogin, async (req, res) => {
         
 
         
+        // Broadcast room creation to main lobby
+        if (io.sockets.adapter.rooms.has('main_lobby')) {
+            getRoomInfoList().then(roomList => {
+                io.to('main_lobby').emit('roomListUpdate', {
+                    rooms: roomList,
+                    connectedUsers: io.sockets.sockets.size
+                });
+            }).catch(error => {
+                console.error('Error getting room list for creation broadcast:', error);
+            });
+        }
+
         // Grant access to the creator if a password was set
         if (hashedPassword) {
             req.session[`room_${roomId}_access`] = true; // Grant access for this session
@@ -827,8 +839,10 @@ io.on('connection', (socket) => {
 
     // --- Handle Main Lobby Join ---
     socket.on('joinMainLobby', async () => {
-         // Make sure we're tracking 'main_lobby' joins
-         socket.join('main_lobby');
+         // Make sure we're tracking 'main_lobby' joins (check if already joined)
+         if (!socket.rooms.has('main_lobby')) {
+             socket.join('main_lobby');
+         }
 
          // Send current room list
          try {
@@ -1444,6 +1458,20 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('userLeft', leaveMsg);
         io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
 
+        // Join user to main lobby immediately to prevent user count drop
+        socket.join('main_lobby');
+        
+        // Send current room list and user count to this user
+        try {
+            const roomList = await getRoomInfoList();
+            socket.emit('roomListUpdate', {
+                rooms: roomList,
+                connectedUsers: io.sockets.sockets.size
+            });
+        } catch (error) {
+            console.error('Error getting room list for exit transition:', error);
+        }
+
         // If room is now empty, delete it immediately (only for explicit exits)
         if (room.users.size === 0) {
             try {
@@ -1475,7 +1503,7 @@ io.on('connection', (socket) => {
             }
         }
 
-        // Redirect user to main lobby
+        // Redirect user to main lobby (user is already joined server-side)
         socket.emit('redirectToMain');
     });
 
