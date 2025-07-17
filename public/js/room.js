@@ -409,7 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sendButton) sendButton.disabled = true;
     });
 
-    socket.on('loadLogs', (logs, options) => {
+    socket.on('loadLogs', (logs) => {
         if (!chatLog) return;
         
         // Clear the chat log safely
@@ -458,10 +458,8 @@ document.addEventListener('DOMContentLoaded', () => {
              console.error("[RoomJS] Invalid 'loadLogs' data received.");
         }
 
-        // Only show "Successfully joined room" message if it's not a quick reconnection
-        if (!options || !options.isQuickReconnect) {
-            logMessage(`<div class="system-message" style="color:blue;">Successfully joined room. Chat enabled.</div>`);
-        }
+        // Always show "Successfully joined room" message
+        logMessage(`<div class="system-message" style="color:blue;">Successfully joined room. Chat enabled.</div>`);
         
         if (messageInput) messageInput.disabled = false;
         if (sendButton) sendButton.disabled = false;
@@ -711,8 +709,58 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Handle upload button click
-        // Replace the upload button click handler with this enhanced diagnostic version
-        // Fixed upload button click handler without syntax errors
+        // Shared function to handle image upload
+        function uploadImage(file, source = 'upload') {
+            // Check file type
+            if (!file.type.match('image.*')) {
+                console.error("[RoomJS] File is not an image");
+                logMessage(`<div class="system-message" style="color:red;">Error: Please select an image file.</div>`);
+                return;
+            }
+
+            // Check file size (limit to 2MB)
+            if (file.size > 2 * 1024 * 1024) {
+                console.error("[RoomJS] File is too large:", file.size, "bytes");
+                logMessage(`<div class="system-message" style="color:red;">Error: Image must be smaller than 2MB.</div>`);
+                return;
+            }
+
+            // Show uploading message
+            const uploadingMessage = source === 'paste' ? 'Uploading pasted image...' : 'Uploading image...';
+            logMessage(`<div class="system-message">${uploadingMessage}</div>`);
+
+            // Create FormData and upload
+            const formData = new FormData();
+            formData.append('image', file);
+
+            fetch('/upload/' + roomId, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().catch(() => {
+                        throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
+                    }).then(errorData => {
+                        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data.success) {
+                    console.error("[RoomJS] Upload failed:", data.message);
+                    logMessage(`<div class="system-message" style="color:red;">Upload failed: ${escapeHtml(data.message || 'Unknown server error')}</div>`);
+                }
+            })
+            .catch(error => {
+                console.error("[RoomJS] Upload error:", error);
+                const errorMessage = source === 'paste' ? 'Paste upload error' : 'Upload error';
+                logMessage(`<div class="system-message" style="color:red;">${errorMessage}: ${escapeHtml(error.message)}</div>`);
+            });
+        }
+
+        // Upload button click handler
         uploadButton.addEventListener('click', () => {
             // If no file is selected, trigger the file input dialog
             if (!imageInput.files || !imageInput.files[0]) {
@@ -721,72 +769,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const file = imageInput.files[0];
-
-            // Check file type
-            if (!file.type.match('image.*')) {
-                console.error("[RoomJS] File is not an image");
-                logMessage(`<div class="system-message" style="color:red;">Error: Please select an image file.</div>`);
-                // Reset file input in case of error
-                imageInput.value = '';
-                return;
-            }
-
-            // Check file size (limit to 2MB)
-            if (file.size > 2 * 1024 * 1024) {
-                console.error("[RoomJS] File is too large:", file.size, "bytes");
-                logMessage(`<div class="system-message" style="color:red;">Error: Image must be smaller than 2MB.</div>`);
-                // Reset file input in case of error
-                imageInput.value = '';
-                return;
-            }
-
-            // Show uploading message
-            logMessage(`<div class="system-message">Uploading image...</div>`);
-
-            // Create FormData object for direct HTTP upload
-            const formData = new FormData();
-            formData.append('image', file);
-
-            // Use direct HTTP upload instead of Socket.IO
-            fetch('/upload/' + roomId, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                // Check if response is ok (status in the range 200-299)
-                if (!response.ok) {
-                    // Attempt to parse error message from JSON response, otherwise use status text
-                    return response.json().catch(() => {
-                        // If JSON parsing fails, throw an error with status text
-                        throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
-                    }).then(errorData => {
-                        // If JSON parsing succeeds, throw an error with the message from the server
-                        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-                    });
-                }
-                return response.json(); // Parse JSON body for successful responses
-            })
-            .then(data => {
-                // Server should send back { success: true, imageUrl: '...' } or { success: false, message: '...' }
-                if (data.success) {
-                    // Success! The server will emit a socket event to all clients
-                    logMessage(`<div class="system-message" style="color:green;">Image uploaded successfully!</div>`);
-                } else {
-                    // This case might be handled by the !response.ok check now, but keep for explicit server failure message
-                    console.error("[RoomJS] Upload failed:", data.message);
-                    logMessage(`<div class="system-message" style="color:red;">Upload failed: ${escapeHtml(data.message || 'Unknown server error')}</div>`);
-                }
-                // Reset file input regardless of success or failure
-                imageInput.value = '';
-            })
-            .catch(error => {
-                console.error("[RoomJS] Upload error:", error);
-                // Display the error message caught from fetch or thrown from .then block
-                logMessage(`<div class="system-message" style="color:red;">Upload error: ${escapeHtml(error.message)}</div>`);
-                // Reset file input
-                imageInput.value = '';
-            });
-        }); // End of upload button event listener
+            uploadImage(file, 'upload');
+            
+            // Reset file input
+            imageInput.value = '';
+        });
     } else {
         console.warn("[RoomJS] Image upload button or input not found."); // Added warning if elements are missing
     }
@@ -795,98 +782,28 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Function to handle clipboard paste events
     function handlePaste(e) {
-        // Check if we're pasting into the message input field
-        const activeElement = document.activeElement;
-        if (activeElement !== messageInput) {
-            return; // Only process pastes in the message input
-        }
+        // Only process pastes in the message input field
+        if (document.activeElement !== messageInput) return;
         
-        // Check for clipboard data
-        if (!e.clipboardData || !e.clipboardData.items) {
-            return;
-        }
+        // Check for clipboard data and find image
+        const items = e.clipboardData?.items;
+        if (!items) return;
         
-        // Look for images in pasted content
-        const items = e.clipboardData.items;
-        let imageItem = null;
+        const imageItem = Array.from(items).find(item => item.type.indexOf('image') !== -1);
+        if (!imageItem) return;
         
-        for (let i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image') !== -1) {
-                imageItem = items[i];
-                break;
-            }
-        }
-        
-        // If no image is found, let the default paste behavior continue
-        if (!imageItem) {
-            return;
-        }
-        
-        // Prevent the default paste behavior since we're handling an image
+        // Prevent default paste behavior for images
         e.preventDefault();
         
-        // Get the image as a file
+        // Get the image file
         const blob = imageItem.getAsFile();
-        if (!blob) {
-            return;
-        }
+        if (!blob) return;
         
-        // Generate a unique filename
+        // Create a file with unique name and upload
         const timestamp = new Date().getTime();
-        const filename = `pasted-image-${timestamp}.png`;
+        const file = new File([blob], `pasted-image-${timestamp}.png`, { type: blob.type });
         
-        // Create a File object from the blob
-        const file = new File([blob], filename, { type: blob.type });
-        
-        // Check file size (limit to 2MB like in the upload handler)
-        if (file.size > 2 * 1024 * 1024) {
-            console.error("[RoomJS] Pasted image is too large:", file.size, "bytes");
-            logMessage(`<div class="system-message" style="color:red;">Error: Pasted image must be smaller than 2MB.</div>`);
-            return;
-        }
-        
-        // Show uploading message
-        logMessage(`<div class="system-message">Uploading pasted image...</div>`);
-        
-        // Create FormData for upload
-        const formData = new FormData();
-        formData.append('image', file);
-        
-        // Use the existing upload mechanism
-        fetch('/upload/' + roomId, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            // Check if response is ok (status in the range 200-299)
-            if (!response.ok) {
-                // Attempt to parse error message from JSON response, otherwise use status text
-                return response.json().catch(() => {
-                    // If JSON parsing fails, throw error with status text
-                    throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
-                }).then(errorData => {
-                    // If JSON parsing succeeds, throw error with the message from the server
-                    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-                });
-            }
-            return response.json(); // Parse JSON body for successful responses
-        })
-        .then(data => {
-            // Server should send back { success: true, imageUrl: '...' } or { success: false, message: '...' }
-            if (data.success) {
-                // Success! The server will emit a socket event to all clients
-                logMessage(`<div class="system-message" style="color:green;">Pasted image uploaded successfully!</div>`);
-            } else {
-                // This case might be handled by the !response.ok check now, but keep for explicit server failure message
-                console.error("[RoomJS] Paste upload failed:", data.message);
-                logMessage(`<div class="system-message" style="color:red;">Paste upload failed: ${escapeHtml(data.message || 'Unknown server error')}</div>`);
-            }
-        })
-        .catch(error => {
-            console.error("[RoomJS] Paste upload error:", error);
-            // Display the error message caught from fetch or thrown from .then block
-            logMessage(`<div class="system-message" style="color:red;">Paste upload error: ${escapeHtml(error.message)}</div>`);
-        });
+        uploadImage(file, 'paste');
     }
     
     // Add the paste event listener to the document

@@ -163,114 +163,8 @@ const upload = multer({
 let rooms = {};
 // userSockets: Map<username, socketId> - For quick lookup (simplistic, assumes unique usernames)
 let userSockets = new Map();
-// roomDeletionTimers: Map<roomId, timeoutId> - Track pending room deletions
-let roomDeletionTimers = new Map();
-// recentDisconnections: Map<username, {roomId, timestamp}> - Track recent disconnections for quick reconnection detection
-let recentDisconnections = new Map();
 
 // ================== HELPER FUNCTIONS ==================
-
-// Helper function to schedule room deletion with grace period
-function scheduleRoomDeletion(roomId, gracePeriodMs = 10000) { // 10 seconds grace period
-    // Cancel any existing deletion timer for this room
-    if (roomDeletionTimers.has(roomId)) {
-        clearTimeout(roomDeletionTimers.get(roomId));
-        roomDeletionTimers.delete(roomId);
-    }
-    
-    // Schedule new deletion
-    const timeoutId = setTimeout(async () => {
-        try {
-            const room = rooms[roomId];
-            if (room && room.users.size === 0) {
-
-                
-                // Delete from MongoDB
-                await operations.room.delete(roomId);
-                
-                // Delete from memory
-                delete rooms[roomId];
-                
-                // Remove from deletion timers
-                roomDeletionTimers.delete(roomId);
-                
-                // Notify main lobby about room deletion
-                if (io.sockets.adapter.rooms.has('main_lobby')) {
-                    io.to('main_lobby').emit('roomDeleted', roomId);
-                    
-                    // Update room list
-                    getRoomInfoList().then(roomList => {
-                        io.to('main_lobby').emit('roomListUpdate', {
-                            rooms: roomList,
-                            connectedUsers: io.sockets.sockets.size
-                        });
-                    }).catch(error => {
-                        console.error('Error getting room list for room deletion:', error);
-                    });
-                }
-                
-                // Notify admin panel about room deletion
-                if (io.sockets.adapter.rooms.has('admin_room')) {
-                    getAdminData().then(adminData => {
-                        io.to('admin_room').emit('adminUpdate', adminData);
-                    }).catch(error => {
-                        console.error('Error getting admin data for room deletion:', error);
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error during scheduled room deletion:', error);
-        }
-    }, gracePeriodMs);
-    
-    // Store the timeout ID so we can cancel it later
-    roomDeletionTimers.set(roomId, timeoutId);
-}
-
-// Helper function to cancel scheduled room deletion
-function cancelRoomDeletion(roomId) {
-    if (roomDeletionTimers.has(roomId)) {
-        clearTimeout(roomDeletionTimers.get(roomId));
-        roomDeletionTimers.delete(roomId);
-    }
-}
-
-// Helper function to track user disconnection for quick reconnection detection
-function trackDisconnection(username, roomId) {
-    recentDisconnections.set(username, {
-        roomId: roomId,
-        timestamp: Date.now()
-    });
-    
-    // Clean up old disconnection records after 10 seconds
-    setTimeout(() => {
-        if (recentDisconnections.has(username)) {
-            const disconnection = recentDisconnections.get(username);
-            if (disconnection.roomId === roomId && disconnection.timestamp) {
-                recentDisconnections.delete(username);
-            }
-        }
-    }, 10000);
-}
-
-// Helper function to check if user is quickly reconnecting (within 5 seconds)
-function isQuickReconnection(username, roomId) {
-    if (!recentDisconnections.has(username)) {
-        return false;
-    }
-    
-    const disconnection = recentDisconnections.get(username);
-    const timeSinceDisconnection = Date.now() - disconnection.timestamp;
-    
-    // If user disconnected from same room within 5 seconds, it's a quick reconnection
-    if (disconnection.roomId === roomId && timeSinceDisconnection < 5000) {
-        // Clean up the disconnection record since we've processed it
-        recentDisconnections.delete(username);
-        return true;
-    }
-    
-    return false;
-}
 
 // Helper function to extract real IP address from request/socket
 function getRealIpAddress(req) {
@@ -392,42 +286,7 @@ async function addLog(roomId, logEntry) {
     }
 }
 
-// Function to remove recent leave message when user quickly reconnects
-async function removeRecentLeaveMessage(roomId, username) {
-    try {
-        // Remove from in-memory logs
-        if (rooms[roomId]) {
-            const recentLogs = rooms[roomId].logs;
-            const now = Date.now();
-            
-            // Find recent leave message from same user (within last 10 seconds)
-            for (let i = recentLogs.length - 1; i >= 0; i--) {
-                const log = recentLogs[i];
-                if (log.type === 'leave' && 
-                    log.username === username && 
-                    (now - log.timestamp) < 10000) { // Within 10 seconds
-                    
-                    // Remove from memory
-                    recentLogs.splice(i, 1);
 
-                    break;
-                }
-            }
-        }
-        
-        // Remove from MongoDB (find and delete recent leave message)
-        const tenSecondsAgo = new Date(Date.now() - 10000);
-        await operations.message.findOneAndDelete({
-            roomId: roomId,
-            type: 'leave',
-            username: username,
-            timestamp: { $gte: tenSecondsAgo }
-        });
-        
-    } catch (error) {
-        console.error('Error removing recent leave message:', error);
-    }
-}
 
 // Simple middleware to require login for protected routes
 function requireLogin(req, res, next) {
@@ -1059,29 +918,11 @@ io.on('connection', (socket) => {
 
         // fromLobby parameter indicates if this is a join from the main lobby join button
 
-        // --- Leave previous room if necessary ---
-        if (socket.currentRoom && socket.currentRoom !== roomId && rooms[socket.currentRoom]) {
-            const prevRoomId = socket.currentRoom;
-            const prevRoom = rooms[prevRoomId];
-            if (prevRoom.users.has(socket.id)) {
-                const leavingUsername = prevRoom.users.get(socket.id).username;
-                const wasAdmin = prevRoom.users.get(socket.id).isAdmin;
-                prevRoom.users.delete(socket.id);
-                socket.leave(prevRoomId); // Leave the Socket.IO room
-                // console.log(`${leavingUsername} left room ${prevRoom.name} (${prevRoomId}) to join another.`);
-
-                // Log and notify previous room
-                const leaveLog = { type: 'leave', username: leavingUsername, isAdmin: wasAdmin, timestamp: Date.now() };
-                addLog(prevRoomId, leaveLog);
-                io.to(prevRoomId).emit('userLeft', leaveLog);
-                io.to(prevRoomId).emit('updateUserList', Array.from(prevRoom.users.values()).map(u => u.username));
-
-                // Check if previous room became empty and schedule deletion
-                if (prevRoom.users.size === 0) {
-                    scheduleRoomDeletion(prevRoomId);
-                }
-            }
+        // --- Prevent joining different room while in another room ---
+        if (socket.currentRoom && socket.currentRoom !== roomId) {
+            return socket.emit('errorMsg', 'You must leave your current room before joining another room.');
         }
+
          // Also leave the main lobby if joining a specific room
          if (socket.rooms.has('main_lobby')) {
              socket.leave('main_lobby');
@@ -1093,26 +934,17 @@ io.on('connection', (socket) => {
         socket.currentRoom = roomId;
         room.users.set(socket.id, { username: socket.username, isAdmin: socket.isAdmin }); // Add user to room map
         userSockets.set(socket.username, socket.id); // Update lookup map (might overwrite if user has multiple tabs)
-        
-        // Cancel any scheduled deletion for this room since it's no longer empty
-        cancelRoomDeletion(roomId);
 
         // console.log(`${socket.username} ${socket.isAdmin ? '(Admin)' : ''} successfully joined room: ${room.name} (${roomId})`);
 
-        // Check if this is a quick reconnection (page refresh)
-        const isQuickReconnect = isQuickReconnection(socket.username, roomId);
-
-        // Send recent chat history (logs) to the joining user, include reconnection info
-        socket.emit('loadLogs', room.logs, { isQuickReconnect: isQuickReconnect });
+        // Send recent chat history (logs) to the joining user
+        socket.emit('loadLogs', room.logs);
 
         // Notify everyone in the room about the new user (only when joining from main lobby via Join button)
-        if (fromLobby && !isQuickReconnect) {
+        if (fromLobby) {
             const joinMsg = { type: 'join', username: socket.username, isAdmin: socket.isAdmin, timestamp: Date.now() };
             addLog(roomId, joinMsg);
             io.to(roomId).emit('userJoined', joinMsg); // Send specific join message
-        } else if (isQuickReconnect) {
-            // Remove the recent leave message for quick reconnections
-            await removeRecentLeaveMessage(roomId, socket.username);
         }
         
         // Always update user list regardless of reconnection type
@@ -1612,12 +1444,8 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('userLeft', leaveMsg);
         io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
 
-        // If room is now empty, delete it immediately (no grace period for explicit exits)
+        // If room is now empty, delete it immediately (only for explicit exits)
         if (room.users.size === 0) {
-            
-            // Cancel any pending delayed deletion
-            cancelRoomDeletion(roomId);
-            
             try {
                 // Delete from MongoDB
                 await operations.room.delete(roomId);
@@ -1670,23 +1498,16 @@ io.on('connection', (socket) => {
                 const userInfo = room.users.get(socket.id); // Get info before deleting
                 room.users.delete(socket.id); // Remove user from room map
 
-                // Track disconnection for quick reconnection detection
-                trackDisconnection(userInfo.username, roomId);
-
                 // console.log(`${userInfo.username} left room: ${room.name} due to disconnect.`);
 
                 // Do NOT emit userLeft message for disconnections - only for explicit exits
                 // Only update the user list silently
                 io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
 
-                // Check if room is now empty and schedule deletion with grace period
-                if (room.users.size === 0) {
-                    scheduleRoomDeletion(roomId);
-                } else {
-                     // If room not deleted, update user count in main lobby
-                     if (io.sockets.adapter.rooms.has('main_lobby')) {
-                          io.to('main_lobby').emit('roomUserCountUpdate', { roomId: roomId, userCount: room.users.size });
-                     }
+                // For disconnections, keep the room alive regardless of user count
+                // Update user count in main lobby
+                if (io.sockets.adapter.rooms.has('main_lobby')) {
+                     io.to('main_lobby').emit('roomUserCountUpdate', { roomId: roomId, userCount: room.users.size });
                 }
             }
         }
