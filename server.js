@@ -811,7 +811,6 @@ app.post('/admin-login', async (req, res) => {
                 // Set admin-specific session data
                 req.session.username = username;
                 req.session.isAdmin = true;
-                console.log("Admin logged in:", username);
                 
                 // Update last seen for admin user
                 operations.user.updateLastSeen(username);
@@ -934,7 +933,6 @@ io.on('connection', (socket) => {
 
     if (!socket.username) {
         // This might happen if session expired or wasn't established correctly
-        console.warn(`Socket ${socket.id} connected without valid session/username. Disconnecting.`);
         socket.disconnect(true);
         return; // Stop further processing for this socket
     }
