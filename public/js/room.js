@@ -596,7 +596,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     socket.on('roomDeleted', (reason) => {
         console.warn(`[RoomJS] ROOM DELETED event fired. Reason: ${reason}`);
-        logMessage(`<div class="system-message" style="color:red;">${escapeHtml(reason)}</div>`);
         if (messageInput) messageInput.disabled = true;
         if (sendButton) sendButton.disabled = true;
         // Redirect to main after 3 seconds
