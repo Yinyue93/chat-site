@@ -5,6 +5,7 @@ const http = require('http');
 const { Server } = require("socket.io");
 const path = require('path');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
@@ -116,11 +117,15 @@ if (!sessionSecret) {
 }
 
 const sessionMiddleware = session({
-    secret: sessionSecret || 'unsafe_default_secret_please_set_in_env', // Use env secret or fallback (warn if fallback is used)
+    secret: sessionSecret,
     resave: false, // Don't save session if unmodified
     saveUninitialized: false, // Don't create session until something stored
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGODB_URI,
+        touchAfter: 24 * 3600 // lazy session update (24 hours)
+    }),
     cookie: {
-        secure: false, // Set to true if your Glitch project uses HTTPS consistently (usually does)
+        secure: true, // Set to true if your Glitch project uses HTTPS consistently (usually does)
         httpOnly: true, // Helps prevent XSS attacks
         maxAge: 24 * 60 * 60 * 1000 // Optional: Cookie expiry (e.g., 1 day)
     }
