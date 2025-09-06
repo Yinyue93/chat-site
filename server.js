@@ -346,7 +346,7 @@ app.post('/login', async (req, res) => {
 
         // Store user info in session
         req.session.username = username;
-        req.session.isAdmin = user.isAdmin;
+        req.session.isAdmin = false;
         req.session.save(err => { // Ensure session is saved before redirecting
              if (err) {
                   return res.render('login', { error: 'Login failed, please try again.' });
