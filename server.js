@@ -291,8 +291,6 @@ async function addLog(roomId, logEntry) {
     }
 }
 
-
-
 // Simple middleware to require login for protected routes
 function requireLogin(req, res, next) {
     if (req.session && req.session.username) {
@@ -302,7 +300,6 @@ function requireLogin(req, res, next) {
         res.redirect('/');
     }
 }
-
 
 // ================== ROUTES ==================
 
@@ -654,7 +651,6 @@ app.post('/upload/:roomId', requireLogin, (req, res) => {
     });
 });
 
-
 // ================== ADMIN ROUTES ==================
 
 app.get('/admin-login', (req, res) => {
@@ -795,7 +791,6 @@ app.get('/admin/bans', requireAdmin, async (req, res) => {
         res.status(500).json({ success: false, message: 'Error retrieving bans' });
     }
 });
-
 
 // ================== SOCKET.IO LOGIC ==================
 io.on('connection', (socket) => {

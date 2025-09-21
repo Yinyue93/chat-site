@@ -266,6 +266,4 @@ document.addEventListener('DOMContentLoaded', () => {
         roomSearch.addEventListener('input', () => filterTable(roomsTbody, roomSearch.value));
     } else { console.error("[AdminJS] Could not attach listener to roomSearch."); }
 
-
-
 }); // End of DOMContentLoaded listener

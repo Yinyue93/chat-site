@@ -159,7 +159,6 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsModal.style.display = 'none';
         }
 
-
     // --- Attempt Connection ---
     let socket;
     try {
@@ -387,7 +386,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-
     // --- CORE EVENT LISTENERS ---
 
     socket.on('connect', () => {
@@ -566,7 +564,6 @@ document.addEventListener('DOMContentLoaded', () => {
             logMessage(`<div class="system-message">${escapeHtml(entry.username)}${adminSuffix} left. (${time})</div>`);
         }
     });
-
 
     socket.on('errorMsg', (message) => {
         console.error(`[RoomJS] ERRORMSG event fired. Message: ${message}`);
@@ -774,7 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn("[RoomJS] Image upload button or input not found."); // Added warning if elements are missing
     }
 
-        // --- Clipboard Image Paste ---
+    // --- Clipboard Image Paste ---
     
     // Function to handle clipboard paste events
     function handlePaste(e) {
