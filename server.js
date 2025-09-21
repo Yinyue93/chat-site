@@ -14,13 +14,12 @@ const bcrypt = require('bcrypt');
 require('dotenv').config();
 
 // ================== MONGODB SETUP ==================
-const { connectDB, initializeDatabase, startSessionCleanup, operations } = require('./database');
+const { connectDB, initializeDatabase, operations } = require('./database');
 
 // Initialize MongoDB connection
 connectDB().then(() => {
     initializeDatabase();
     loadRoomsFromDatabase();
-    startSessionCleanup();
 }).catch(error => {
     console.error('Failed to connect to MongoDB:', error);
     process.exit(1);
@@ -125,7 +124,7 @@ const sessionMiddleware = session({
         touchAfter: 24 * 3600 // lazy session update (24 hours)
     }),
     cookie: {
-        secure: true, // Set to true if your Glitch project uses HTTPS consistently (usually does)
+        secure: process.env.NODE_ENV === 'production', // Set to true if your Glitch project uses HTTPS consistently (usually does)
         httpOnly: true, // Helps prevent XSS attacks
         maxAge: 24 * 60 * 60 * 1000 // Optional: Cookie expiry (e.g., 1 day)
     }

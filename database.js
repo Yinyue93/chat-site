@@ -164,49 +164,14 @@ const banSchema = new mongoose.Schema({
     }
 });
 
-// Session Schema (for persistent sessions)
-const sessionSchema = new mongoose.Schema({
-    sessionId: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    username: {
-        type: String,
-        required: true
-    },
-    isAdmin: {
-        type: Boolean,
-        default: false
-    },
-    ipAddress: {
-        type: String,
-        required: true
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    lastAccessed: {
-        type: Date,
-        default: Date.now
-    },
-    expiresAt: {
-        type: Date,
-        default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
-    }
-});
-
 // Create indexes for better performance
 messageSchema.index({ roomId: 1, timestamp: -1 });
-sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // ================== MODELS ==================
 const User = mongoose.model('User', userSchema);
 const Room = mongoose.model('Room', roomSchema);
 const Message = mongoose.model('Message', messageSchema);
 const Ban = mongoose.model('Ban', banSchema);
-const Session = mongoose.model('Session', sessionSchema);
 
 // ================== DATABASE OPERATIONS ==================
 
@@ -345,33 +310,7 @@ const banOps = {
     }
 };
 
-// Session operations
-const sessionOps = {
-    async create(sessionData) {
-        const session = new Session(sessionData);
-        return await session.save();
-    },
 
-    async findById(sessionId) {
-        return await Session.findOne({ sessionId });
-    },
-
-    async update(sessionId, updates) {
-        return await Session.findOneAndUpdate(
-            { sessionId },
-            { ...updates, lastAccessed: new Date() },
-            { new: true }
-        );
-    },
-
-    async delete(sessionId) {
-        return await Session.findOneAndDelete({ sessionId });
-    },
-
-    async cleanExpired() {
-        return await Session.deleteMany({ expiresAt: { $lt: new Date() } });
-    }
-};
 
 // ================== UTILITY FUNCTIONS ==================
 
@@ -400,34 +339,22 @@ const initializeDatabase = async () => {
     }
 };
 
-// Clean up expired sessions periodically
-const startSessionCleanup = () => {
-    setInterval(async () => {
-        try {
-            await sessionOps.cleanExpired();
-        } catch (error) {
-            console.error('Error cleaning expired sessions:', error);
-        }
-    }, 60 * 60 * 1000); // Clean every hour
-};
+
 
 // ================== EXPORTS ==================
 module.exports = {
     connectDB,
     initializeDatabase,
-    startSessionCleanup,
     models: {
         User,
         Room,
         Message,
-        Ban,
-        Session
+        Ban
     },
     operations: {
         user: userOps,
         room: roomOps,
         message: messageOps,
-        ban: banOps,
-        session: sessionOps
+        ban: banOps
     }
-}; 
+};
