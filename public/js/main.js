@@ -40,6 +40,98 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, "&#039;");
     }
 
+    // --- Password Modal Elements/State ---
+    const passwordModal = document.getElementById('password-modal');
+    const passwordForm = document.getElementById('password-form');
+    const passwordInput = document.getElementById('password-input');
+    const passwordError = document.getElementById('password-error');
+    const passwordCancel = document.getElementById('password-cancel');
+    const passwordRoomName = document.getElementById('password-room-name');
+    let pendingRoomId = null;
+
+    function openPasswordModal(roomId, roomName) {
+        pendingRoomId = roomId;
+        if (passwordRoomName) passwordRoomName.textContent = roomName || '';
+        if (passwordError) {
+            passwordError.textContent = '';
+            passwordError.style.display = 'none';
+        }
+        if (passwordInput) {
+            passwordInput.value = '';
+            setTimeout(() => passwordInput && passwordInput.focus(), 100);
+        }
+        if (passwordModal) {
+            passwordModal.classList.add('is-open');
+        }
+    }
+
+    function closePasswordModal() {
+        pendingRoomId = null;
+        if (passwordModal) {
+            passwordModal.classList.remove('is-open');
+        }
+    }
+
+    if (passwordCancel) {
+        passwordCancel.addEventListener('click', (e) => {
+            e.preventDefault();
+            closePasswordModal();
+        });
+    }
+
+    // Close on backdrop click
+    if (passwordModal) {
+        passwordModal.addEventListener('click', (e) => {
+            if (e.target === passwordModal) {
+                closePasswordModal();
+            }
+        });
+    }
+
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && passwordModal && passwordModal.classList.contains('is-open')) {
+            closePasswordModal();
+        }
+    });
+
+    if (passwordForm) {
+        passwordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!pendingRoomId || !passwordInput) return;
+            const pwd = passwordInput.value;
+            try {
+                const resp = await fetch(`/room/${pendingRoomId}/password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ password: pwd })
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (resp.ok && data && data.success) {
+                    // On success, go to the room; the room page socket will perform the join
+                    window.location.href = `/room/${pendingRoomId}`;
+                } else {
+                    const message = (data && data.message) || 'Incorrect password';
+                    if (passwordError) {
+                        passwordError.textContent = message;
+                        passwordError.style.display = 'block';
+                    } else {
+                        alert(message);
+                    }
+                }
+            } catch (err) {
+                console.error('[MainJS] Password verify error:', err);
+                if (passwordError) {
+                    passwordError.textContent = 'Password verification failed, try again.';
+                    passwordError.style.display = 'block';
+                }
+            }
+        });
+    }
+
     // --- Helper: Update Room List ---
     function updateRoomList(rooms) {
         if (!roomList) return;
@@ -97,11 +189,17 @@ document.addEventListener('DOMContentLoaded', () => {
             let joinButton = document.createElement('button');
             joinButton.className = 'join-button';
             joinButton.textContent = 'Join';
+            joinButton.dataset.roomId = room.id;
+            joinButton.dataset.haspass = room.hasPassword ? '1' : '0';
             joinButton.addEventListener('click', () => {
-                // Emit socket event to join room from lobby
-                socket.emit('joinRoom', { roomId: room.id, fromLobby: true });
-                // Navigate to room page
-                window.location.href = `/room/${room.id}`;
+                if (room.hasPassword) {
+                    // Use nearby DOM to get the room name for the modal
+                    const name = room.name;
+                    openPasswordModal(room.id, name);
+                } else {
+                    // Navigate only; the room page will handle the socket join
+                    window.location.href = `/room/${room.id}`;
+                }
             });
             li.appendChild(joinButton);
             
@@ -180,6 +278,22 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSingleRoom(updatedRoom);
     });
 
+    // Handle room user count updates
+    socket.on('roomUserCountUpdate', (data) => {
+        const { roomId, userCount } = data;
+        const roomElement = document.querySelector(`[data-room-id="${roomId}"]`);
+        if (roomElement) {
+            const detailsSpan = roomElement.querySelector('.room-details');
+            if (detailsSpan) {
+                // Extract max users from current text and update with new user count
+                const currentText = detailsSpan.textContent;
+                const maxUsersMatch = currentText.match(/\/ (\d+) users/);
+                const maxUsers = maxUsersMatch ? maxUsersMatch[1] : '?';
+                detailsSpan.textContent = ` (${userCount} / ${maxUsers} users)`;
+            }
+        }
+    });
+
     socket.on('roomDeleted', (roomId) => {
         // Find and remove the room from the list or refresh the entire list
         const roomElements = roomList.querySelectorAll('li');
@@ -251,9 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Make joinRoom function globally accessible for template onclick handlers
     window.joinRoom = function(roomId) {
-        // Emit socket event to join room from lobby
-        socket.emit('joinRoom', { roomId: roomId, fromLobby: true });
-        // Navigate to room page
+        // Navigate to room page; the room page will handle socket join
         window.location.href = `/room/${roomId}`;
     };
 });

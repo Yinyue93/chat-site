@@ -579,24 +579,38 @@ app.post('/room/:roomId/password', requireLogin, async (req, res) => {
      const { password } = req.body;
      const session = req.session;
 
+     const expectsJson = req.headers['accept'] && req.headers['accept'].includes('application/json');
+
      try {
          // Check if room exists in MongoDB
          const dbRoom = await operations.room.findById(roomId);
-         if (!dbRoom) return res.redirect('/main'); // Room disappeared?
+         if (!dbRoom) {
+            if (expectsJson) return res.status(404).json({ success: false, message: 'Room not found' });
+            return res.redirect('/main'); // Room disappeared?
+         }
 
          // Check password using bcrypt
          if (dbRoom.password && await comparePassword(password, dbRoom.password)) {
              session[`room_${roomId}_access`] = true; // Grant access for this session
-             session.save(err => { // Save session before redirect
+             session.save(err => { // Save session before redirect/response
                  if (err) console.error("Session save error on password grant:", err);
 
+                 if (expectsJson) {
+                    return res.json({ success: true });
+                 }
                  res.redirect(`/room/${roomId}`);
              });
          } else {
+             if (expectsJson) {
+                return res.status(401).json({ success: false, message: 'Incorrect password' });
+             }
              res.render('password_prompt', { roomId: roomId, roomName: dbRoom.name, error: 'Incorrect password' });
          }
      } catch (error) {
          console.error('Error verifying room password:', error);
+         if (expectsJson) {
+            return res.status(500).json({ success: false, message: 'Password verification failed, please try again.' });
+         }
          res.render('password_prompt', { roomId: roomId, roomName: 'Unknown', error: 'Password verification failed, please try again.' });
      }
 });
@@ -940,6 +954,21 @@ io.on('connection', (socket) => {
             return socket.emit('errorMsg', 'You must leave your current room before joining another room.');
         }
 
+        // --- Prevent duplicate joins to the same room ---
+        if (socket.currentRoom === roomId) {
+            // User is already in this room, just send the current state without triggering join events
+            socket.emit('loadLogs', room.logs);
+            socket.emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
+            socket.emit('roomInfo', {
+                name: room.name,
+                maxUsers: room.maxUsers,
+                currentUsers: room.users.size,
+                isHidden: room.isHidden,
+                createdBy: room.createdBy
+            });
+            return;
+        }
+
          // Also leave the main lobby if joining a specific room
          if (socket.rooms.has('main_lobby')) {
              socket.leave('main_lobby');
@@ -958,15 +987,18 @@ io.on('connection', (socket) => {
         // Send recent chat history (logs) to the joining user
         socket.emit('loadLogs', room.logs);
 
-        // Notify everyone in the room about the new user (only when joining from main lobby via Join button)
-        if (fromLobby) {
-            const joinMsg = { type: 'join', username: socket.username, isAdmin: socket.isAdmin, timestamp: Date.now() };
-            addLog(roomId, joinMsg);
-            io.to(roomId).emit('userJoined', joinMsg); // Send specific join message
-        }
-        
-        // Always update user list regardless of reconnection type
+        // Always notify everyone in the room about the new user
+        const joinMsg = { type: 'join', username: socket.username, isAdmin: socket.isAdmin, timestamp: Date.now() };
+        addLog(roomId, joinMsg);
+        io.to(roomId).emit('userJoined', joinMsg);
+
+        // Update user list (no deduplication needed)
         io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
+
+        // Update user count in main lobby for real-time updates
+        if (io.sockets.adapter.rooms.has('main_lobby')) {
+            io.to('main_lobby').emit('roomUserCountUpdate', { roomId: roomId, userCount: room.users.size });
+        }
 
         // Notify admin panel about user joining the room
          if (io.sockets.adapter.rooms.has('admin_room')) {
@@ -1460,7 +1492,15 @@ io.on('connection', (socket) => {
         const leaveMsg = { type: 'leave', username: userInfo.username, isAdmin: userInfo.isAdmin, timestamp: Date.now() };
         await addLog(roomId, leaveMsg);
         io.to(roomId).emit('userLeft', leaveMsg);
-        io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
+        {
+            const usernames = [...new Set(Array.from(room.users.values()).map(u => u.username))];
+            io.to(roomId).emit('updateUserList', usernames);
+        }
+
+        // Update user count in main lobby for real-time updates
+        if (io.sockets.adapter.rooms.has('main_lobby')) {
+            io.to('main_lobby').emit('roomUserCountUpdate', { roomId: roomId, userCount: room.users.size });
+        }
 
         // Join user to main lobby immediately to prevent user count drop
         socket.join('main_lobby');
@@ -1536,8 +1576,11 @@ io.on('connection', (socket) => {
                 // console.log(`${userInfo.username} left room: ${room.name} due to disconnect.`);
 
                 // Do NOT emit userLeft message for disconnections - only for explicit exits
-                // Only update the user list silently
-                io.to(roomId).emit('updateUserList', Array.from(room.users.values()).map(u => u.username));
+                // Only update the user list silently (deduped)
+                {
+                    const usernames = [...new Set(Array.from(room.users.values()).map(u => u.username))];
+                    io.to(roomId).emit('updateUserList', usernames);
+                }
 
                 // For disconnections, keep the room alive regardless of user count
                 // Update user count in main lobby

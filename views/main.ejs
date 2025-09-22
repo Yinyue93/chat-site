@@ -51,7 +51,7 @@
 										<span class="password-icon" title="Password protected">🔒</span>
 									<% } %>
 								</div>
-								<button class="join-button" onclick="joinRoom('<%= room.id %>')">Join</button>
+								<button class="join-button" data-room-id="<%= room.id %>" data-haspass="<%= room.hasPassword ? '1' : '0' %>" onclick="joinRoom('<%= room.id %>')">Join</button>
 							</li>
 						<% }); %>
 					</ul>
@@ -80,6 +80,24 @@
 				<button type="submit">Create Room</button>
 			</form>
 		</section>
+	</div>
+
+	<!-- Password Modal -->
+	<div id="password-modal" class="modal-backdrop">
+		<div class="modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
+			<h3 id="password-modal-title">Enter password to join <span id="password-room-name"></span></h3>
+			<p id="password-error" class="error-text" style="display:none;"></p>
+			<form id="password-form">
+				<div class="form-group">
+					<label for="password-input">Room Password:</label>
+					<input type="password" id="password-input" name="password" required>
+				</div>
+				<div class="modal-actions">
+					<button type="button" id="password-cancel" class="logout-btn">Cancel</button>
+					<button type="submit" class="join-button">Join</button>
+				</div>
+			</form>
+		</div>
 	</div>
 </body>
 </html>
