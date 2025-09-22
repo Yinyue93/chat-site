@@ -1,85 +1,85 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat Rooms - Glitch Chat</title>
-    <link rel="stylesheet" href="/css/main.css">
-    <!-- Add Socket.IO client library -->
-    <script src="/socket.io/socket.io.js"></script>
-    <!-- Add main.js for real-time updates -->
-    <script src="/js/main.js"></script>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Chat Rooms - Glitch Chat</title>
+	<link rel="stylesheet" href="/css/main.css">
+	<!-- Add Socket.IO client library -->
+	<script src="/socket.io/socket.io.js"></script>
+	<!-- Add main.js for real-time updates -->
+	<script src="/js/main.js"></script>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="user-info">Welcome, <strong><%= username %></strong>!</div>
-            <div class="actions">
-                <!-- Added Admin Panel Button (Conditional) -->
-                <% if (typeof isAdmin !== 'undefined' && isAdmin) { %>
-                    <a href="/admin" class="admin-panel-btn">Admin Panel</a>
-                <% } %>
-                <!-- End Added Button -->
+	<div class="container">
+		<div class="header">
+			<div class="user-info">Welcome, <strong><%= username %></strong>!</div>
+			<div class="actions">
+				<!-- Added Admin Panel Button (Conditional) -->
+				<% if (typeof isAdmin !== 'undefined' && isAdmin) { %>
+					<a href="/admin" class="admin-panel-btn">Admin Panel</a>
+				<% } %>
+				<!-- End Added Button -->
 
-                <!-- Added Logout Form/Button -->
-                <form action="/logout" method="POST" style="display: inline;">
-                    <button type="submit" class="logout-btn">Logout</button>
-                </form>
-                 <!-- End Added Logout -->
-            </div>
-        </div>
+				<!-- Added Logout Form/Button -->
+				<form action="/logout" method="POST" style="display: inline;">
+					<button type="submit" class="logout-btn">Logout</button>
+				</form>
+				 <!-- End Added Logout -->
+			</div>
+		</div>
 
-        <!-- Add stats section -->
-        <div class="stats-section">
-            <p>Online Users: <span id="user-count"><%= connectedUsers %></span></p>
-        </div>
+		<!-- Add stats section -->
+		<div class="stats-section">
+			<p>Online Users: <span id="user-count"><%= connectedUsers %></span></p>
+		</div>
 
-        <!-- Section for Available Rooms - Modified for dynamic updates -->
-        <section class="room-list">
-            <h2>Available Rooms (<span id="room-count"><%= rooms.length %></span>)</h2>
-            <div id="room-list">
-                <% if (typeof rooms !== 'undefined' && rooms.length > 0) { %>
-                    <ul>
-                        <% rooms.forEach(room => { %>
-                            <li>
-                                <div>
-                                    <a href="/room/<%= room.id %>"><%= room.name %></a>
-                                    <span class="details">
-                                        (<%= room.userCount %> / <%= room.maxUsers %> users)
-                                    </span>
-                                    <% if (room.hasPassword) { %>
-                                        <span class="password-icon" title="Password protected">🔒</span>
-                                    <% } %>
-                                </div>
-                                <button class="join-button" onclick="joinRoom('<%= room.id %>')">Join</button>
-                            </li>
-                        <% }); %>
-                    </ul>
-                <% } else { %>
-                    <p class="no-rooms">No rooms available yet. Create one below!</p>
-                <% } %>
-            </div>
-        </section>
+		<!-- Section for Available Rooms - Modified for dynamic updates -->
+		<section class="room-list">
+			<h2>Available Rooms (<span id="room-count"><%= rooms.length %></span>)</h2>
+			<div id="room-list">
+				<% if (typeof rooms !== 'undefined' && rooms.length > 0) { %>
+					<ul>
+						<% rooms.forEach(room => { %>
+							<li>
+								<div>
+									<a href="/room/<%= room.id %>"><%= room.name %></a>
+									<span class="details">
+										(<%= room.userCount %> / <%= room.maxUsers %> users)
+									</span>
+									<% if (room.hasPassword) { %>
+										<span class="password-icon" title="Password protected">🔒</span>
+									<% } %>
+								</div>
+								<button class="join-button" onclick="joinRoom('<%= room.id %>')">Join</button>
+							</li>
+						<% }); %>
+					</ul>
+				<% } else { %>
+					<p class="no-rooms">No rooms available yet. Create one below!</p>
+				<% } %>
+			</div>
+		</section>
 
-        <!-- Section for Creating a Room -->
-        <section class="create-room-form">
-            <h2>Create New Room</h2>
-            <form action="/create-room" method="POST">
-                <div class="form-group">
-                    <label for="roomName">Room Name:</label>
-                    <input type="text" id="roomName" name="roomName" required>
-                </div>
-                <div class="form-group">
-                    <label for="maxUsers">Max Participants:</label>
-                    <input type="number" id="maxUsers" name="maxUsers" min="1" value="10" required>
-                </div>
-                <div class="form-group">
-                    <label for="password">Password (Optional):</label>
-                    <input type="password" id="password" name="password" placeholder="Leave blank for no password">
-                </div>
-                <button type="submit">Create Room</button>
-            </form>
-        </section>
-    </div>
+		<!-- Section for Creating a Room -->
+		<section class="create-room-form">
+			<h2>Create New Room</h2>
+			<form action="/create-room" method="POST">
+				<div class="form-group">
+					<label for="roomName">Room Name:</label>
+					<input type="text" id="roomName" name="roomName" required>
+				</div>
+				<div class="form-group">
+					<label for="maxUsers">Max Participants:</label>
+					<input type="number" id="maxUsers" name="maxUsers" min="1" value="10" required>
+				</div>
+				<div class="form-group">
+					<label for="password">Password (Optional):</label>
+					<input type="password" id="password" name="password" placeholder="Leave blank for no password">
+				</div>
+				<button type="submit">Create Room</button>
+			</form>
+		</section>
+	</div>
 </body>
 </html>

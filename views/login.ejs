@@ -1,32 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Glitch Chat</title>
-    <link rel="stylesheet" href="/css/login.css">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Login - Glitch Chat</title>
+	<link rel="stylesheet" href="/css/login.css">
 </head>
 <body>
-    <div class="login-container">
-        <h1>Login to Chat</h1>
+	<div class="login-container">
+		<h1>Login to Chat</h1>
 
-        <% if (typeof error !== 'undefined' && error) { %>
-            <p class="error"><%= error %></p>
-        <% } %>
+			<% if (typeof error !== 'undefined' && error) { %>
+				<p class="error"><%= error %></p>
+			<% } %>
 
-        <form action="/login" method="POST">
-            <div class="form-group">
-                <label for="username">Choose a Username:</label>
-                <input type="text" id="username" name="username" required minlength="3" placeholder="At least 3 characters">
-            </div>
-            <button type="submit">Enter Chat</button>
-        </form>
+			<form action="/login" method="POST">
+				<div class="form-group">
+					<label for="username">Choose a Username:</label>
+					<input type="text" id="username" name="username" required minlength="3" placeholder="At least 3 characters">
+				</div>
+					<button type="submit">Enter Chat</button>
+			</form>
 
-        <!-- Added Admin Login Link -->
-        <p class="admin-link">
-            <a href="/admin-login">Admin Login</a>
-        </p>
-         <!-- End Added Link -->
-    </div>
+			<!-- Added Admin Login Link -->
+			<p class="admin-link">
+				<a href="/admin-login">Admin Login</a>
+			</p>
+					<!-- End Added Link -->
+	</div>
 </body>
 </html>
