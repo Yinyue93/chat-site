@@ -1583,7 +1583,7 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 // Crucial: Listen on the http server, not the Express app directly
 server.listen(PORT, () => {
-    console.log(`🚀 Server listening on port ${PORT}`);
+    console.log(`🚀 Server is running on http://localhost:${PORT}`);
     if (!process.env.SESSION_SECRET) {
         console.warn("⚠️ WARNING: SESSION_SECRET is not set in .env! Session security is compromised.");
     }
