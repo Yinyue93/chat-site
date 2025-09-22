@@ -132,6 +132,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Admin flag exposed by server (via window.IS_ADMIN or <html data-is-admin>)
+    const htmlEl = document.documentElement;
+    const dataAdmin = htmlEl && htmlEl.getAttribute('data-is-admin');
+    const IS_ADMIN = (window.IS_ADMIN === true || window.IS_ADMIN === 'true' || dataAdmin === '1');
+
     // --- Helper: Update Room List ---
     function updateRoomList(rooms) {
         if (!roomList) return;
@@ -192,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
             joinButton.dataset.roomId = room.id;
             joinButton.dataset.haspass = room.hasPassword ? '1' : '0';
             joinButton.addEventListener('click', () => {
-                if (room.hasPassword) {
+                if (room.hasPassword && !IS_ADMIN) {
                     // Use nearby DOM to get the room name for the modal
                     const name = room.name;
                     openPasswordModal(room.id, name);

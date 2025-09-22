@@ -582,6 +582,18 @@ app.post('/room/:roomId/password', requireLogin, async (req, res) => {
      const expectsJson = req.headers['accept'] && req.headers['accept'].includes('application/json');
 
      try {
+         // Admins bypass room password verification
+         if (session.isAdmin) {
+             session[`room_${roomId}_access`] = true;
+             return session.save(err => {
+                 if (err) console.error("Session save error on admin password bypass:", err);
+                 if (expectsJson) {
+                     return res.json({ success: true });
+                 }
+                 res.redirect(`/room/${roomId}`);
+             });
+         }
+
          // Check if room exists in MongoDB
          const dbRoom = await operations.room.findById(roomId);
          if (!dbRoom) {
