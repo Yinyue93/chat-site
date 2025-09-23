@@ -396,3 +396,59 @@ h1,
 .typing-indicator.visible {
     display: block;
 }
+
+/* Responsive adjustments - chat room */
+@media (max-width: 700px) {
+    body {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .chat-container {
+        margin: 10px;
+        box-shadow: none;
+    }
+
+    .room-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .user-count-display {
+        padding: 0;
+    }
+
+    #chat-log {
+        max-height: 55vh;
+    }
+
+    .message-input-area {
+        flex-wrap: wrap;
+    }
+
+    #message-input {
+        flex-basis: 100%;
+    }
+
+    #volume-slider {
+        width: 100%;
+    }
+
+    .sidebar {
+        width: auto;
+        margin: 0 10px 10px 10px;
+        order: 2;
+    }
+
+    #exit-button {
+        position: static;
+        width: 100%;
+    }
+
+    .modal-content {
+        width: 90%;
+        margin: 20% auto;
+    }
+}

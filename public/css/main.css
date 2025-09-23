@@ -254,3 +254,55 @@ button[type="submit"] {
 .modal .join-button:hover {
     background-color: #218838;
 }
+
+/* Responsive adjustments - mobile first without altering desktop */
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+
+    .container {
+        margin: 10px auto;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: none;
+    }
+
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .header .actions form,
+    .header .actions a {
+        margin-left: 0;
+    }
+
+    .stats-section {
+        text-align: left;
+        font-size: 0.95em;
+    }
+
+    .room-list li {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="password"] {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .modal {
+        max-width: 95vw;
+        padding: 16px;
+    }
+
+    .modal-actions {
+        justify-content: stretch;
+    }
+}

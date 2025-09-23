@@ -46,3 +46,21 @@ button:hover {
     color: red;
     margin-bottom: 15px;
 }
+
+/* Responsive adjustments - admin login */
+@media (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+
+    .login-container {
+        margin: 20px auto;
+        padding: 20px;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+        width: 100%;
+        box-sizing: border-box;
+    }
+}
